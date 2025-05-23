@@ -1,10 +1,16 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Search } from "lucide-react";
 
 const Navbar: React.FC = () => {
+  const location = useLocation();
+
+  const isActive = (path: string) => {
+    return location.pathname === path ? "text-brand-600" : "text-gray-600 hover:text-brand-600 transition-colors";
+  };
+  
   return (
     <nav className="w-full py-4 bg-white border-b border-gray-100">
       <div className="container flex items-center justify-between">
@@ -14,9 +20,9 @@ const Navbar: React.FC = () => {
             <span className="text-xl font-bold">PrepPath</span>
           </Link>
           <div className="hidden md:flex items-center space-x-6">
-            <Link to="/features" className="text-gray-600 hover:text-brand-600 transition-colors">Features</Link>
-            <Link to="/pricing" className="text-gray-600 hover:text-brand-600 transition-colors">Pricing</Link>
-            <Link to="/resources" className="text-gray-600 hover:text-brand-600 transition-colors">Resources</Link>
+            <Link to="/features" className={isActive('/features')}>Features</Link>
+            <Link to="/pricing" className={isActive('/pricing')}>Pricing</Link>
+            <Link to="/resources" className={isActive('/resources')}>Resources</Link>
           </div>
         </div>
         
