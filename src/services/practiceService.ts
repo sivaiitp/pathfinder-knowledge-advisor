@@ -89,7 +89,7 @@ export const updateProblemProgress = async (
         .from('user_problem_attempts')
         .update({ 
           completed,
-          code_submission: codeSubmission || (existingAttempt.code_submission ?? null),
+          code_submission: codeSubmission !== undefined ? codeSubmission : existingAttempt.code_submission,
           submitted_at: new Date().toISOString()
         })
         .eq('id', existingAttempt.id);

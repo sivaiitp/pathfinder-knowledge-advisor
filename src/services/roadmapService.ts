@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 
@@ -32,6 +33,8 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
     const roadmapSections: RoadmapSection[] = [];
     
     for (const roadmap of roadmapData) {
+      if (!roadmap.id) continue; // Skip if roadmap id is missing
+      
       const { data: topicsData, error: topicsError } = await supabase
         .from('learning_topics')
         .select('*')
@@ -43,9 +46,9 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
       // Transform the topics data into LearningTopic objects
       const learningTopics: LearningTopic[] = topicsData.map((topic: any) => ({
         id: topic.id,
-        name: topic.name,
+        name: topic.title,
         description: topic.description,
-        completed: topic.completed
+        completed: topic.completed || false
       }));
       
       // Calculate completed and total topics
@@ -55,7 +58,7 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
       // Add the roadmap section to the result
       roadmapSections.push({
         id: roadmap.id,
-        title: roadmap.target_role,
+        title: roadmap.target_role || "Custom Roadmap",
         topics: learningTopics,
         completed: completedTopics,
         total: totalTopics
@@ -125,13 +128,16 @@ export const generateAIRoadmap = async (options: {
     
     const roadmapId = roadmapRecord.id;
     
+    // Map the topics to include the roadmap ID and proper structure
+    const dbTopics = roadmapData.topics.map((topic: any) => ({
+      ...topic,
+      roadmap_id: roadmapId
+    }));
+    
     // Next, store all the learning topics
     const { error: topicsError } = await supabase
       .from('learning_topics')
-      .insert(roadmapData.topics.map((topic: any) => ({
-        ...topic,
-        roadmap_id: roadmapId
-      })));
+      .insert(dbTopics);
     
     if (topicsError) throw topicsError;
     

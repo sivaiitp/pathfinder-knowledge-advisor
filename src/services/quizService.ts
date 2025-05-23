@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 
@@ -38,7 +39,12 @@ export const checkUserAssessment = async (userId: string): Promise<{ id: string;
       .maybeSingle();
 
     if (error) throw error;
-    return data as { id: string; score: number } | null;
+    if (!data) return null;
+    
+    return {
+      id: data.id,
+      score: data.score
+    };
   } catch (error: any) {
     console.error('Error checking assessment:', error);
     return null;
@@ -115,15 +121,34 @@ export const saveQuizResults = async (
 // Save AI-generated questions to the database
 export const saveQuizQuestions = async (questions: QuizQuestion[]): Promise<QuizQuestion[] | null> => {
   try {
+    // Map the QuizQuestion objects to match the database schema
+    const dbQuestions = questions.map(q => ({
+      question_text: q.question,
+      options: q.options,
+      correct_answer: q.correctAnswer,
+      explanation: q.explanation,
+      difficulty: q.difficulty,
+      topic: q.topic
+    }));
+    
     const { data, error } = await supabase
       .from('quiz_questions')
-      .insert(questions)
+      .insert(dbQuestions)
       .select();
     
     if (error) throw error;
     if (!data) return null;
     
-    return data as QuizQuestion[];
+    // Map the database results back to QuizQuestion objects
+    return data.map(item => ({
+      id: item.id,
+      question: item.question_text,
+      options: item.options,
+      correctAnswer: item.correct_answer,
+      explanation: item.explanation || "",
+      difficulty: item.difficulty,
+      topic: item.topic
+    }));
   } catch (error: any) {
     console.error('Error saving quiz questions:', error);
     toast.error('Failed to save quiz questions');
