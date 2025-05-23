@@ -89,13 +89,23 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
       const totalTopics = learningTopics.length;
       
       // Add the roadmap section to the result
-      roadmapSections.push({
-        id: roadmapId,
-        title: roadmap.target_role || "Custom Roadmap",
-        topics: learningTopics,
-        completed: completedTopics,
-        total: totalTopics
-      });
+      if (roadmap && 'target_role' in roadmap) {
+        roadmapSections.push({
+          id: roadmapId,
+          title: roadmap.target_role || "Custom Roadmap",
+          topics: learningTopics,
+          completed: completedTopics,
+          total: totalTopics
+        });
+      } else {
+        roadmapSections.push({
+          id: roadmapId,
+          title: "Custom Roadmap",
+          topics: learningTopics,
+          completed: completedTopics,
+          total: totalTopics
+        });
+      }
     }
     
     return roadmapSections;
@@ -164,8 +174,12 @@ export const generateAIRoadmap = async (options: {
     if (roadmapError) throw roadmapError;
     if (!roadmapRecord || typeof roadmapRecord !== 'object') throw new Error('Failed to create roadmap record');
     
+    // Ensure roadmapRecord.id exists before using it
+    if (!('id' in roadmapRecord) || !roadmapRecord.id) {
+      throw new Error('Invalid roadmap ID');
+    }
+    
     const roadmapId = roadmapRecord.id;
-    if (!roadmapId) throw new Error('Invalid roadmap ID');
     
     // Map the topics to include the roadmap ID and proper structure
     // Make sure to match the schema of the learning_topics table

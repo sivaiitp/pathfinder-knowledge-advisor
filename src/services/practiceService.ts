@@ -42,7 +42,7 @@ export const fetchUserPracticeProblems = async (userId: string): Promise<Practic
     
     if (completedProblems) {
       completedProblems.forEach(item => {
-        if (item && typeof item === 'object' && 'problem_id' in item) {
+        if (item && typeof item === 'object' && 'problem_id' in item && item.problem_id) {
           completedProblemIds.add(item.problem_id);
         }
       });
