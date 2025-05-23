@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 
@@ -35,7 +36,7 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
       // Skip if roadmap doesn't exist
       if (!roadmap || typeof roadmap !== 'object') continue;
       
-      // Safely access the roadmap ID using optional chaining or more explicit check
+      // Safely access the roadmap ID using optional chaining
       const roadmapId = roadmap?.id;
       if (!roadmapId) continue; // Skip if roadmap id is missing
       

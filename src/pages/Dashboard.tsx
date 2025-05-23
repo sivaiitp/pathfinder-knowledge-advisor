@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { toast } from "@/components/ui/sonner";
 import Navbar from "@/components/Navbar";
@@ -129,12 +128,24 @@ const Dashboard = () => {
   const generatePersonalizedRoadmap = async () => {
     if (!user || !latestAssessment) {
       toast.error("Assessment information not available");
+      console.error("Cannot generate roadmap: missing user or assessment ID", {
+        user: user?.id,
+        assessmentId: latestAssessment
+      });
       return;
     }
 
     try {
       setIsGeneratingRoadmap(true);
       toast.info("Generating your personalized roadmap...");
+      
+      console.log('Generating roadmap with data:', {
+        userId: user.id,
+        assessmentId: latestAssessment,
+        targetRole: userInfo.role,
+        targetCompany: userInfo.company !== "Not specified" ? userInfo.company : undefined,
+        interviewDate: new Date(Date.now() + (userInfo.daysLeft * 24 * 60 * 60 * 1000)).toISOString()
+      });
       
       const result = await generateAIRoadmap({
         userId: user.id,
@@ -145,6 +156,7 @@ const Dashboard = () => {
       });
       
       if (result.success) {
+        console.log('Roadmap generated successfully:', result);
         toast.success("Personalized roadmap created!");
         
         // Generate practice problems also
@@ -153,6 +165,7 @@ const Dashboard = () => {
         // Reload the roadmap data to show new topics
         loadUserRoadmap();
       } else {
+        console.error('Roadmap generation failed:', result);
         toast.error("Failed to create personalized roadmap");
       }
     } catch (error) {
@@ -266,9 +279,16 @@ const Dashboard = () => {
     }
     
     try {
+      console.log('Quiz completed. Saving results:', {
+        user: user.id,
+        score,
+        responsesCount: responses.length
+      });
+      
       const assessmentId = await saveQuizResults(user.id, score, responses);
       
       if (assessmentId) {
+        console.log('Assessment saved successfully with ID:', assessmentId);
         setHasCompletedAssessment(true);
         setLatestAssessment(assessmentId);
         
@@ -278,9 +298,11 @@ const Dashboard = () => {
         
         // Automatically start generating the roadmap
         setTimeout(() => {
+          console.log('Automatically generating roadmap with assessment ID:', assessmentId);
           generatePersonalizedRoadmap();
         }, 1500);
       } else {
+        console.error('Failed to save assessment - no assessment ID returned');
         toast.error("Failed to save assessment results.");
       }
     } catch (error) {

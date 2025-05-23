@@ -80,6 +80,10 @@ export const saveQuizResults = async (
   responses: QuizResponse[]
 ): Promise<string | null> => {
   try {
+    console.log('Saving quiz results for user:', userId);
+    console.log('Score:', score);
+    console.log('Responses:', responses);
+    
     // First create assessment record
     const { data: assessmentData, error: assessmentError } = await supabase
       .from('user_assessments')
@@ -91,9 +95,17 @@ export const saveQuizResults = async (
       .select()
       .single();
     
-    if (assessmentError) throw assessmentError;
-    if (!assessmentData) throw new Error('Failed to create assessment record');
+    if (assessmentError) {
+      console.error('Error creating assessment record:', assessmentError);
+      throw assessmentError;
+    }
     
+    if (!assessmentData) {
+      console.error('No assessment data returned');
+      throw new Error('Failed to create assessment record');
+    }
+    
+    console.log('Assessment created:', assessmentData);
     const assessmentId = (assessmentData as any).id as string;
     
     // Then save all the user responses
@@ -108,8 +120,12 @@ export const saveQuizResults = async (
       .from('user_quiz_responses')
       .insert(userResponses);
     
-    if (responsesError) throw responsesError;
+    if (responsesError) {
+      console.error('Error saving quiz responses:', responsesError);
+      throw responsesError;
+    }
     
+    console.log('Quiz responses saved successfully');
     return assessmentId;
   } catch (error: any) {
     console.error('Error saving quiz results:', error);

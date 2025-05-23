@@ -67,6 +67,9 @@ const Quiz: React.FC<QuizProps> = ({ questions, onComplete }) => {
         };
       });
       
+      console.log('Quiz completed with score:', scorePercentage);
+      console.log('Responses:', responses);
+      
       // Call the parent's onComplete function with the score and responses
       onComplete(scorePercentage, responses);
       

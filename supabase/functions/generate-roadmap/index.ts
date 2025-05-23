@@ -19,7 +19,10 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Generate roadmap function called');
     const { userId, assessmentId, targetRole, targetCompany, interviewDate } = await req.json();
+    
+    console.log('Request parameters:', { userId, assessmentId, targetRole, targetCompany, interviewDate });
     
     if (!openAIApiKey) {
       throw new Error('OPENAI_API_KEY is not configured');
@@ -33,31 +36,49 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch assessment data to understand user's skill level
+    console.log('Fetching assessment data for ID:', assessmentId);
     const { data: assessmentData, error: assessmentError } = await supabase
       .from('user_assessments')
       .select('id, score, created_at')
       .eq('id', assessmentId)
       .single();
 
-    if (assessmentError) throw assessmentError;
+    if (assessmentError) {
+      console.error('Error fetching assessment data:', assessmentError);
+      throw assessmentError;
+    }
+    
+    console.log('Assessment data:', assessmentData);
 
     // Fetch the user's quiz responses to understand their knowledge gaps
+    console.log('Fetching quiz responses for assessment ID:', assessmentId);
     const { data: quizResponses, error: responsesError } = await supabase
       .from('user_quiz_responses')
       .select('question_id, is_correct, user_answer')
       .eq('assessment_id', assessmentId);
 
-    if (responsesError) throw responsesError;
+    if (responsesError) {
+      console.error('Error fetching quiz responses:', responsesError);
+      throw responsesError;
+    }
+    
+    console.log(`Found ${quizResponses?.length || 0} quiz responses`);
 
     // Fetch the questions to understand which topics they struggled with
     const questionIds = quizResponses.map((r: any) => r.question_id);
+    console.log('Fetching question details for IDs:', questionIds);
     
     const { data: quizQuestions, error: questionsError } = await supabase
       .from('quiz_questions')
       .select('id, question_text, topic, difficulty')
       .in('id', questionIds);
 
-    if (questionsError) throw questionsError;
+    if (questionsError) {
+      console.error('Error fetching quiz questions:', questionsError);
+      throw questionsError;
+    }
+    
+    console.log(`Found ${quizQuestions?.length || 0} quiz questions`);
     
     // Create a mapping to join responses with questions
     const questionsMap = new Map();
@@ -69,7 +90,10 @@ serve(async (req) => {
     const topicResults = new Map();
     quizResponses.forEach((r: any) => {
       const question = questionsMap.get(r.question_id);
-      if (!question) return;
+      if (!question) {
+        console.log(`Question not found for ID: ${r.question_id}`);
+        return;
+      }
       
       if (!topicResults.has(question.topic)) {
         topicResults.set(question.topic, { correct: 0, total: 0 });
@@ -93,6 +117,8 @@ serve(async (req) => {
         details: `${counts.correct}/${counts.total} questions answered correctly`
       };
     });
+    
+    console.log('Topics analysis:', topicsAnalysis);
 
     // Build the prompt for OpenAI
     const prompt = {
@@ -146,6 +172,7 @@ Ensure the roadmap:
       ]
     };
 
+    console.log('Calling OpenAI API for roadmap generation');
     // Call OpenAI API
     const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -159,18 +186,23 @@ Ensure the roadmap:
     const openAIData = await openAIResponse.json();
     
     if (!openAIData.choices || !openAIData.choices[0]) {
+      console.error('Invalid response from OpenAI:', openAIData);
       throw new Error('Invalid response from OpenAI');
     }
     
     // Extract and parse the JSON from the AI's response
     const aiText = openAIData.choices[0].message.content;
+    console.log('AI response text:', aiText);
+    
     const jsonMatch = aiText.match(/\{[\s\S]*\}/);
     
     if (!jsonMatch) {
+      console.error('Could not extract JSON from AI response');
       throw new Error('Could not extract valid JSON from OpenAI response');
     }
     
     const roadmapData = JSON.parse(jsonMatch[0]);
+    console.log('Parsed roadmap data with topics:', roadmapData.topics?.length);
 
     return new Response(JSON.stringify(roadmapData), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
