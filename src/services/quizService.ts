@@ -93,7 +93,8 @@ export const saveQuizResults = async (
     }
     
     // Access the id field directly from the result data object
-    const assessmentId = result.data.id;
+    // Using type assertion to assure TypeScript that the id property exists
+    const assessmentId = (result.data as { id: string }).id;
     
     if (!assessmentId) {
       toast.error('Failed to get valid assessment ID');
@@ -151,9 +152,10 @@ export const saveQuizQuestions = async (questions: QuizQuestion[]) => {
     }
     
     // Map the returned IDs to the original questions
+    // Using type assertion to assure TypeScript that each item has an id property
     return result.data.map((item: any, index: number) => ({
       ...questions[index],
-      id: item.id
+      id: (item as { id: string }).id
     }));
   } catch (error: any) {
     console.error('Error saving questions:', error);
