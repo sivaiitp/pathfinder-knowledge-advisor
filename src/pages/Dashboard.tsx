@@ -170,7 +170,8 @@ const Dashboard = () => {
       if (questions && questions.length > 0) {
         // Save the generated questions to the database
         const questionsWithIds = await saveQuizQuestions(questions);
-        setQuizQuestions(questionsWithIds);
+        // Ensure the questionsWithIds is of type QuizQuestion[]
+        setQuizQuestions(questionsWithIds as QuizQuestion[]);
         setCurrentView('quiz');
       } else {
         toast.error("Failed to generate quiz questions. Please try again.");

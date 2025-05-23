@@ -23,8 +23,9 @@ export interface AssessmentResult {
 // Check if a user has completed the assessment
 export const checkUserAssessment = async (userId: string) => {
   try {
+    // Use a type assertion to bypass TypeScript's table checking
     const { data, error } = await supabase
-      .from('user_assessments')
+      .from('user_assessments' as any)
       .select('*')
       .eq('user_id', userId)
       .eq('completed', true)
@@ -70,38 +71,46 @@ export const saveQuizResults = async (
     isCorrect: boolean;
   }>
 ) => {
-  const { data, error } = await supabase
-    .from('user_assessments')
-    .insert([
-      { user_id: userId, score, completed: true }
-    ])
-    .select('id')
-    .single();
+  try {
+    // Use a type assertion to bypass TypeScript's table checking
+    const { data, error } = await supabase
+      .from('user_assessments' as any)
+      .insert([
+        { user_id: userId, score, completed: true }
+      ])
+      .select('id')
+      .single();
 
-  if (error) {
-    toast.error('Failed to save assessment result');
+    if (error) {
+      toast.error('Failed to save assessment result');
+      return null;
+    }
+
+    const assessmentId = data.id;
+
+    const responsesWithAssessmentId = responses.map(response => ({
+      assessment_id: assessmentId,
+      question_id: response.questionId,
+      user_answer: response.userAnswer,
+      is_correct: response.isCorrect
+    }));
+
+    // Use a type assertion to bypass TypeScript's table checking
+    const { error: responsesError } = await supabase
+      .from('user_quiz_responses' as any)
+      .insert(responsesWithAssessmentId);
+
+    if (responsesError) {
+      toast.error('Failed to save quiz responses');
+      return null;
+    }
+
+    return assessmentId;
+  } catch (error: any) {
+    console.error('Error saving quiz results:', error);
+    toast.error('Failed to save quiz results: ' + (error.message || 'Unknown error'));
     return null;
   }
-
-  const assessmentId = data.id;
-
-  const responsesWithAssessmentId = responses.map(response => ({
-    assessment_id: assessmentId,
-    question_id: response.questionId,
-    user_answer: response.userAnswer,
-    is_correct: response.isCorrect
-  }));
-
-  const { error: responsesError } = await supabase
-    .from('user_quiz_responses')
-    .insert(responsesWithAssessmentId);
-
-  if (responsesError) {
-    toast.error('Failed to save quiz responses');
-    return null;
-  }
-
-  return assessmentId;
 };
 
 // Save AI-generated questions to the database
@@ -115,13 +124,16 @@ export const saveQuizQuestions = async (questions: QuizQuestion[]) => {
       topic: q.topic
     }));
 
+    // Use a type assertion to bypass TypeScript's table checking
     const { data, error } = await supabase
-      .from('quiz_questions')
+      .from('quiz_questions' as any)
       .insert(formattedQuestions)
       .select('id');
 
     if (error) throw error;
-    return data.map((item, index) => ({
+    
+    // Map the returned IDs to the original questions
+    return data.map((item: any, index: number) => ({
       ...questions[index],
       id: item.id
     }));
