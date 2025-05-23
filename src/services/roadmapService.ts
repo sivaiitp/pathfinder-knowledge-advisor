@@ -39,7 +39,7 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
   try {
     // Fetch all topics
     const { data: topicsData, error: topicsError } = await supabase
-      .from('learning_topics')
+      .from('learning_topics' as any)
       .select('*')
       .order('difficulty', { ascending: true });
 
@@ -47,7 +47,7 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
     
     // Fetch user progress for these topics
     const { data: progressData, error: progressError } = await supabase
-      .from('user_progress')
+      .from('user_progress' as any)
       .select('*')
       .eq('user_id', userId);
     
@@ -55,26 +55,33 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
     
     // Create a map of topic_id -> completed status
     const topicProgressMap = new Map();
-    progressData?.forEach(progress => {
-      topicProgressMap.set(progress.topic_id, progress.completed);
-    });
+    if (progressData) {
+      progressData.forEach((progress: any) => {
+        topicProgressMap.set(progress.topic_id, progress.completed);
+      });
+    }
     
     // Group topics by category and build roadmap sections
-    const categoriesMap = new Map<string, LearningTopic[]>();
+    const categoriesMap = new Map<string, any[]>();
     
-    topicsData?.forEach(topic => {
-      if (!categoriesMap.has(topic.category)) {
-        categoriesMap.set(topic.category, []);
-      }
-      
-      // Add completed status to topic
-      const topicWithProgress = {
-        ...topic,
-        completed: topicProgressMap.has(topic.id) ? topicProgressMap.get(topic.id) : false
-      };
-      
-      categoriesMap.get(topic.category)?.push(topicWithProgress);
-    });
+    if (topicsData) {
+      topicsData.forEach((topic: any) => {
+        if (!categoriesMap.has(topic.category)) {
+          categoriesMap.set(topic.category, []);
+        }
+        
+        // Add completed status to topic
+        const topicWithProgress = {
+          ...topic,
+          completed: topicProgressMap.has(topic.id) ? topicProgressMap.get(topic.id) : false
+        };
+        
+        const topics = categoriesMap.get(topic.category);
+        if (topics) {
+          topics.push(topicWithProgress);
+        }
+      });
+    }
     
     // Convert map to array of roadmap sections
     const roadmap: RoadmapSection[] = [];
@@ -108,28 +115,30 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
 export const updateTopicProgress = async (userId: string, topicId: string, completed: boolean): Promise<boolean> => {
   try {
     // Check if there's already a progress entry for this topic
-    const { data: existingProgress } = await supabase
-      .from('user_progress')
+    const { data: existingProgress, error: selectError } = await supabase
+      .from('user_progress' as any)
       .select('*')
       .eq('user_id', userId)
       .eq('topic_id', topicId)
       .maybeSingle();
     
+    if (selectError) throw selectError;
+    
     if (existingProgress) {
       // Update existing progress
-      const { error } = await supabase
-        .from('user_progress')
+      const { error: updateError } = await supabase
+        .from('user_progress' as any)
         .update({ 
           completed,
           completed_at: completed ? new Date().toISOString() : null
         })
         .eq('id', existingProgress.id);
       
-      if (error) throw error;
+      if (updateError) throw updateError;
     } else {
       // Create new progress entry
-      const { error } = await supabase
-        .from('user_progress')
+      const { error: insertError } = await supabase
+        .from('user_progress' as any)
         .insert({
           user_id: userId,
           topic_id: topicId,
@@ -137,7 +146,7 @@ export const updateTopicProgress = async (userId: string, topicId: string, compl
           completed_at: completed ? new Date().toISOString() : null
         });
       
-      if (error) throw error;
+      if (insertError) throw insertError;
     }
     
     return true;

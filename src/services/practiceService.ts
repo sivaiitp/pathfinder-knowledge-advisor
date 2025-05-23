@@ -26,17 +26,17 @@ export interface UserProblemAttempt {
 // Fetch practice problems with user progress
 export const fetchUserPracticeProblems = async (userId: string): Promise<PracticeProblem[] | null> => {
   try {
-    // Fetch all practice problems
+    // Fetch all practice problems - using type assertion to bypass TypeScript constraints
     const { data: problemsData, error: problemsError } = await supabase
-      .from('practice_problems')
+      .from('practice_problems' as any)
       .select('*')
       .order('difficulty');
     
     if (problemsError) throw problemsError;
     
-    // Fetch user attempts for these problems
+    // Fetch user attempts for these problems - using type assertion to bypass TypeScript constraints
     const { data: attemptsData, error: attemptsError } = await supabase
-      .from('user_problem_attempts')
+      .from('user_problem_attempts' as any)
       .select('*')
       .eq('user_id', userId);
     
@@ -44,17 +44,19 @@ export const fetchUserPracticeProblems = async (userId: string): Promise<Practic
     
     // Create a map of problem_id -> completed status
     const problemAttemptsMap = new Map();
-    attemptsData?.forEach(attempt => {
-      problemAttemptsMap.set(attempt.problem_id, attempt.completed);
-    });
+    if (attemptsData) {
+      attemptsData.forEach((attempt: any) => {
+        problemAttemptsMap.set(attempt.problem_id, attempt.completed);
+      });
+    }
     
     // Add completed status to each problem
-    const problemsWithStatus = problemsData?.map(problem => ({
+    const problemsWithStatus = problemsData ? problemsData.map((problem: any) => ({
       ...problem,
       completed: problemAttemptsMap.has(problem.id) ? problemAttemptsMap.get(problem.id) : false
-    }));
+    })) : [];
     
-    return problemsWithStatus || [];
+    return problemsWithStatus as PracticeProblem[];
   } catch (error: any) {
     console.error('Error fetching practice problems:', error);
     toast.error('Failed to load practice problems');
@@ -71,29 +73,31 @@ export const updateProblemProgress = async (
 ): Promise<boolean> => {
   try {
     // Check if there's already an attempt for this problem
-    const { data: existingAttempt } = await supabase
-      .from('user_problem_attempts')
+    const { data: existingAttempt, error: selectError } = await supabase
+      .from('user_problem_attempts' as any)
       .select('*')
       .eq('user_id', userId)
       .eq('problem_id', problemId)
       .maybeSingle();
     
+    if (selectError) throw selectError;
+    
     if (existingAttempt) {
       // Update existing attempt
-      const { error } = await supabase
-        .from('user_problem_attempts')
+      const { error: updateError } = await supabase
+        .from('user_problem_attempts' as any)
         .update({ 
           completed,
-          code_submission: codeSubmission || existingAttempt.code_submission,
+          code_submission: codeSubmission || (existingAttempt as any).code_submission,
           submitted_at: new Date().toISOString()
         })
         .eq('id', existingAttempt.id);
       
-      if (error) throw error;
+      if (updateError) throw updateError;
     } else {
       // Create new attempt
-      const { error } = await supabase
-        .from('user_problem_attempts')
+      const { error: insertError } = await supabase
+        .from('user_problem_attempts' as any)
         .insert({
           user_id: userId,
           problem_id: problemId,
@@ -101,7 +105,7 @@ export const updateProblemProgress = async (
           code_submission: codeSubmission || null
         });
       
-      if (error) throw error;
+      if (insertError) throw insertError;
     }
     
     return true;
@@ -116,13 +120,13 @@ export const updateProblemProgress = async (
 export const getPracticeProblem = async (problemId: string): Promise<PracticeProblem | null> => {
   try {
     const { data, error } = await supabase
-      .from('practice_problems')
+      .from('practice_problems' as any)
       .select('*')
       .eq('id', problemId)
       .maybeSingle();
     
     if (error) throw error;
-    return data;
+    return data as PracticeProblem | null;
   } catch (error: any) {
     console.error('Error fetching practice problem:', error);
     toast.error('Failed to load practice problem');
