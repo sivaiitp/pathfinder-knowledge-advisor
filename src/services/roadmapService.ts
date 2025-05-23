@@ -33,8 +33,10 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
     const roadmapSections: RoadmapSection[] = [];
     
     for (const roadmap of roadmapData) {
-      // Use optional chaining and nullish coalescing to safely access roadmap.id
-      const roadmapId = roadmap?.id || '';
+      if (!roadmap || typeof roadmap !== 'object') continue;
+      
+      // Safely access the roadmap ID
+      const roadmapId = roadmap.id;
       if (!roadmapId) continue; // Skip if roadmap id is missing
       
       // Query user_progress to get learning topics with completion status
@@ -89,7 +91,7 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
       // Add the roadmap section to the result
       roadmapSections.push({
         id: roadmapId,
-        title: (roadmap?.target_role || "Custom Roadmap") as string,
+        title: roadmap.target_role || "Custom Roadmap",
         topics: learningTopics,
         completed: completedTopics,
         total: totalTopics
@@ -160,10 +162,9 @@ export const generateAIRoadmap = async (options: {
       .single();
       
     if (roadmapError) throw roadmapError;
-    if (!roadmapRecord) throw new Error('Failed to create roadmap record');
+    if (!roadmapRecord || typeof roadmapRecord !== 'object') throw new Error('Failed to create roadmap record');
     
-    // Use optional chaining and nullish coalescing to safely access roadmapRecord.id
-    const roadmapId = roadmapRecord?.id || '';
+    const roadmapId = roadmapRecord.id;
     if (!roadmapId) throw new Error('Invalid roadmap ID');
     
     // Map the topics to include the roadmap ID and proper structure

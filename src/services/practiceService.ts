@@ -10,7 +10,7 @@ export interface PracticeProblem {
   tags: string[];
   solution: string | null;
   companyRelevance: string;
-  completed?: boolean; // Add the completed property
+  completed?: boolean;
 }
 
 export interface UserProblemAttempt {
@@ -38,9 +38,15 @@ export const fetchUserPracticeProblems = async (userId: string): Promise<Practic
     }
     
     // Create a set of completed problem IDs for quick lookup
-    const completedProblemIds = new Set(
-      completedProblems?.map(item => item.problem_id || '') || []
-    );
+    const completedProblemIds = new Set();
+    
+    if (completedProblems) {
+      completedProblems.forEach(item => {
+        if (item && typeof item === 'object' && 'problem_id' in item) {
+          completedProblemIds.add(item.problem_id);
+        }
+      });
+    }
     
     // Fetch all practice problems
     const { data: problemsData, error: problemsError } = await supabase
@@ -63,7 +69,7 @@ export const fetchUserPracticeProblems = async (userId: string): Promise<Practic
       tags: problem.tags || [],
       solution: problem.solution || null,
       companyRelevance: problem.company_relevance || '',
-      completed: completedProblemIds.has(problem.id) // Add completed status
+      completed: completedProblemIds.has(problem.id)
     }));
   } catch (error: any) {
     console.error('Error fetching user practice problems:', error);
