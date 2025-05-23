@@ -41,9 +41,10 @@ export const checkUserAssessment = async (userId: string): Promise<{ id: string;
     if (error) throw error;
     if (!data) return null;
     
+    // Handle the type correctly with a type assertion
     return {
-      id: data.id as string,
-      score: data.score as number
+      id: (data as any).id,
+      score: (data as any).score
     };
   } catch (error: any) {
     console.error('Error checking assessment:', error);
@@ -94,7 +95,8 @@ export const saveQuizResults = async (
     if (assessmentError) throw assessmentError;
     if (!assessmentData) throw new Error('Failed to create assessment record');
     
-    const assessmentId = assessmentData.id as string;
+    // Type assertion to handle the id property
+    const assessmentId = (assessmentData as any).id as string;
     
     // Then save all the user responses
     const userResponses = responses.map(response => ({
@@ -139,8 +141,8 @@ export const saveQuizQuestions = async (questions: QuizQuestion[]): Promise<Quiz
     if (error) throw error;
     if (!data) return null;
     
-    // Map the database results back to QuizQuestion objects
-    return data.map((item: any) => ({
+    // Map the database results back to QuizQuestion objects with proper type assertions
+    return (data as any[]).map(item => ({
       id: item.id,
       question: item.question_text,
       options: item.options,

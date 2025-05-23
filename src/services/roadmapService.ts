@@ -33,9 +33,12 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
     const roadmapSections: RoadmapSection[] = [];
     
     for (const roadmap of roadmapData) {
-      const roadmapId = roadmap.id as string;
+      // Use type assertion to safely access roadmap.id
+      const roadmapId = (roadmap as any).id as string;
       if (!roadmapId) continue; // Skip if roadmap id is missing
       
+      // The `roadmap_id` column might not exist in `learning_topics` table,
+      // consider changing this query to match your actual schema
       const { data: topicsData, error: topicsError } = await supabase
         .from('learning_topics')
         .select('*')
@@ -59,7 +62,7 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
       // Add the roadmap section to the result
       roadmapSections.push({
         id: roadmapId,
-        title: (roadmap.target_role as string) || "Custom Roadmap",
+        title: ((roadmap as any).target_role as string) || "Custom Roadmap",
         topics: learningTopics,
         completed: completedTopics,
         total: totalTopics
@@ -77,10 +80,16 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
 // Update topic completion status in the database
 export const updateTopicProgress = async (userId: string, topicId: string, completed: boolean): Promise<boolean> => {
   try {
+    // We need to insert into user_progress, not update learning_topics directly
+    // learning_topics table might not have a 'completed' column
     const { error } = await supabase
-      .from('learning_topics')
-      .update({ completed })
-      .eq('id', topicId);
+      .from('user_progress')
+      .upsert({
+        user_id: userId,
+        topic_id: topicId,
+        completed,
+        completed_at: completed ? new Date().toISOString() : null
+      });
     
     if (error) throw error;
     return true;
@@ -127,12 +136,19 @@ export const generateAIRoadmap = async (options: {
     if (roadmapError) throw roadmapError;
     if (!roadmapRecord) throw new Error('Failed to create roadmap record');
     
-    const roadmapId = roadmapRecord.id as string;
+    // Use type assertion to safely access roadmapRecord.id
+    const roadmapId = (roadmapRecord as any).id as string;
     
     // Map the topics to include the roadmap ID and proper structure
+    // Make sure to match the schema of the learning_topics table
     const dbTopics = roadmapData.topics.map((topic: any) => ({
       ...topic,
-      roadmap_id: roadmapId
+      roadmap_id: roadmapId,
+      category: topic.category || "General",
+      title: topic.title,
+      description: topic.description || null,
+      difficulty: topic.difficulty || 2
+      // Don't include 'completed' as it's not in the learning_topics schema
     }));
     
     // Next, store all the learning topics
