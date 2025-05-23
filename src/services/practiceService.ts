@@ -40,9 +40,9 @@ export const fetchUserPracticeProblems = async (userId: string): Promise<Practic
     // Create a set of completed problem IDs for quick lookup
     const completedProblemIds = new Set();
     
-    if (completedProblems) {
-      completedProblems.forEach(item => {
-        if (item && typeof item === 'object' && 'problem_id' in item && item.problem_id) {
+    if (completedProblems && Array.isArray(completedProblems)) {
+      completedProblems.forEach((item) => {
+        if (item && typeof item === 'object' && 'problem_id' in item && item.problem_id !== null) {
           completedProblemIds.add(item.problem_id);
         }
       });
