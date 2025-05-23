@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -11,13 +10,25 @@ import {
   FileText,
   LayoutGrid,
   Network,
+  Brain,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import AssessmentSetup from "@/components/AssessmentSetup";
+import Quiz from "@/components/Quiz";
+import { useAuth } from "@/contexts/AuthContext";
+import { generateQuiz, saveQuizResults, saveQuizQuestions, checkUserAssessment, QuizQuestion } from "@/services/quizService";
+import { toast } from "@/components/ui/sonner";
 
 const Dashboard = () => {
   const [progress, setProgress] = useState(28);
+  const { user } = useAuth();
+  const [hasCompletedAssessment, setHasCompletedAssessment] = useState<boolean | null>(null);
+  const [isLoadingAssessment, setIsLoadingAssessment] = useState(true);
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [currentView, setCurrentView] = useState<'dashboard' | 'setup' | 'quiz'>('dashboard');
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   
-  // Sample data
+  // Sample data (would need to be fetched from backend in real app)
   const userInfo = {
     name: "Alex",
     role: "Entry-Level Engineer",
@@ -128,38 +139,124 @@ const Dashboard = () => {
     },
   ];
 
-  return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <Navbar />
+  useEffect(() => {
+    const checkAssessment = async () => {
+      if (user) {
+        setIsLoadingAssessment(true);
+        const assessment = await checkUserAssessment(user.id);
+        setHasCompletedAssessment(!!assessment);
+        setIsLoadingAssessment(false);
+      }
+    };
+    
+    checkAssessment();
+  }, [user]);
+  
+  const handleStartAssessment = () => {
+    setCurrentView('setup');
+  };
+  
+  const handleStartQuiz = async (preferences: {
+    userLevel: string;
+    targetCompany: string;
+    role: string;
+    topics: string[];
+    questionsCount: number;
+  }) => {
+    try {
+      setIsGeneratingQuiz(true);
+      const questions = await generateQuiz(preferences);
       
-      <main className="flex-grow container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">
-            Your Personalized Interview Roadmap
-          </h1>
-          <div className="flex items-center justify-between flex-wrap">
-            <div className="flex items-center gap-x-6 mt-2">
-              <div className="flex items-center">
-                <Code className="mr-2 h-5 w-5 text-brand-600" />
-                <span>{userInfo.role}</span>
-              </div>
-              <div className="flex items-center">
-                <Network className="mr-2 h-5 w-5 text-brand-600" />
-                <span>{userInfo.company}</span>
-              </div>
-              <div className="flex items-center">
-                <Clock className="mr-2 h-5 w-5 text-brand-600" />
-                <span>{userInfo.daysLeft} days until interview</span>
-              </div>
-            </div>
-            <div className="mt-4 sm:mt-0">
-              <Button className="bg-brand-600 hover:bg-brand-700">
-                Update Preferences
-              </Button>
-            </div>
+      if (questions && questions.length > 0) {
+        // Save the generated questions to the database
+        const questionsWithIds = await saveQuizQuestions(questions);
+        setQuizQuestions(questionsWithIds);
+        setCurrentView('quiz');
+      } else {
+        toast.error("Failed to generate quiz questions. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error starting quiz:", error);
+      toast.error("An error occurred while generating the quiz.");
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
+  };
+  
+  const handleQuizComplete = async (score: number, responses: Array<{
+    questionId: string;
+    userAnswer: string;
+    isCorrect: boolean;
+  }>) => {
+    if (!user) {
+      toast.error("User not authenticated");
+      return;
+    }
+    
+    try {
+      await saveQuizResults(user.id, score, responses);
+      setHasCompletedAssessment(true);
+      
+      // Give the user some time to review their answers before returning to dashboard
+      setTimeout(() => {
+        setCurrentView('dashboard');
+        toast.success("Assessment results saved successfully!");
+      }, 5000);
+    } catch (error) {
+      console.error("Error saving quiz results:", error);
+      toast.error("Failed to save your assessment results.");
+    }
+  };
+  
+  const renderContent = () => {
+    if (isLoadingAssessment) {
+      return (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto"></div>
+            <p className="mt-4 text-lg">Loading your assessment status...</p>
           </div>
         </div>
-
+      );
+    }
+    
+    if (currentView === 'setup') {
+      return <AssessmentSetup onStartQuiz={handleStartQuiz} isLoading={isGeneratingQuiz} />;
+    }
+    
+    if (currentView === 'quiz') {
+      return <Quiz questions={quizQuestions} onComplete={handleQuizComplete} />;
+    }
+    
+    // Default dashboard view
+    return (
+      <>
+        {!hasCompletedAssessment && (
+          <Card className="mb-8 border-brand-200 bg-brand-50">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Brain className="mr-2 h-5 w-5 text-brand-600" />
+                Technical Assessment Required
+              </CardTitle>
+              <CardDescription>
+                Complete a short assessment to help us create your personalized interview roadmap
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Before we can create a tailored roadmap for your interview preparation, we need to assess your
+                current skill level. This will help us identify areas where you need to focus.
+              </p>
+              <Button 
+                onClick={handleStartAssessment}
+                className="bg-brand-600 hover:bg-brand-700"
+              >
+                Start Assessment
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+        
         {/* Progress Section */}
         <Card className="mb-8">
           <CardHeader>
@@ -310,6 +407,43 @@ const Dashboard = () => {
             </Card>
           </TabsContent>
         </Tabs>
+      </>
+    );
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Navbar />
+      
+      <main className="flex-grow container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">
+            Your Personalized Interview Roadmap
+          </h1>
+          <div className="flex items-center justify-between flex-wrap">
+            <div className="flex items-center gap-x-6 mt-2">
+              <div className="flex items-center">
+                <Code className="mr-2 h-5 w-5 text-brand-600" />
+                <span>{user?.user_metadata?.role || "Software Engineer"}</span>
+              </div>
+              <div className="flex items-center">
+                <Network className="mr-2 h-5 w-5 text-brand-600" />
+                <span>{user?.user_metadata?.company || "Not specified"}</span>
+              </div>
+              <div className="flex items-center">
+                <Clock className="mr-2 h-5 w-5 text-brand-600" />
+                <span>{user?.user_metadata?.daysLeft || 14} days until interview</span>
+              </div>
+            </div>
+            <div className="mt-4 sm:mt-0">
+              <Button className="bg-brand-600 hover:bg-brand-700">
+                Update Preferences
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {renderContent()}
       </main>
 
       <footer className="bg-white border-t border-gray-200 py-6">
