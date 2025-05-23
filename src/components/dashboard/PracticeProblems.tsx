@@ -85,10 +85,10 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({
                 </div>
                 <div className="flex items-center">
                   <span className={`text-xs mr-4 px-2 py-1 rounded-full ${
-                    problem.company_relevance === "High" ? "bg-brand-100 text-brand-700" :
+                    problem.companyRelevance === "High" ? "bg-brand-100 text-brand-700" :
                     "bg-gray-100 text-gray-700"
                   }`}>
-                    {problem.company_relevance} relevance
+                    {problem.companyRelevance} relevance
                   </span>
                   <Button 
                     size="sm" 

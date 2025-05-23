@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 
@@ -9,6 +10,7 @@ export interface PracticeProblem {
   tags: string[];
   solution: string | null;
   companyRelevance: string;
+  completed?: boolean; // Add the completed property
 }
 
 export interface UserProblemAttempt {
@@ -36,7 +38,9 @@ export const fetchUserPracticeProblems = async (userId: string): Promise<Practic
     }
     
     // Create a set of completed problem IDs for quick lookup
-    const completedProblemIds = new Set(completedProblems?.map(item => item.problem_id));
+    const completedProblemIds = new Set(
+      completedProblems?.map(item => item.problem_id || '') || []
+    );
     
     // Fetch all practice problems
     const { data: problemsData, error: problemsError } = await supabase
@@ -58,7 +62,8 @@ export const fetchUserPracticeProblems = async (userId: string): Promise<Practic
       difficulty: problem.difficulty,
       tags: problem.tags || [],
       solution: problem.solution || null,
-      companyRelevance: problem.company_relevance || ''
+      companyRelevance: problem.company_relevance || '',
+      completed: completedProblemIds.has(problem.id) // Add completed status
     }));
   } catch (error: any) {
     console.error('Error fetching user practice problems:', error);
@@ -142,7 +147,8 @@ export const generatePracticeProblems = async (
       difficulty: item.difficulty,
       tags: item.tags || [],
       solution: item.solution || null,
-      companyRelevance: item.company_relevance || ''
+      companyRelevance: item.company_relevance || '',
+      completed: false // New problems are not completed yet
     }));
   } catch (error: any) {
     console.error('Error generating AI practice problems:', error);
