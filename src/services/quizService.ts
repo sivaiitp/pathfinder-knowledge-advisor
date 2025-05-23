@@ -23,9 +23,8 @@ export interface AssessmentResult {
 // Check if a user has completed the assessment
 export const checkUserAssessment = async (userId: string) => {
   try {
-    // Use a type assertion to bypass TypeScript's table checking
     const { data, error } = await supabase
-      .from('user_assessments' as any)
+      .from('user_assessments')
       .select('*')
       .eq('user_id', userId)
       .eq('completed', true)
@@ -74,11 +73,11 @@ export const saveQuizResults = async (
   try {
     // Create a new assessment record
     const { data, error } = await supabase
-      .from('user_assessments' as any)
+      .from('user_assessments')
       .insert([
         { user_id: userId, score, completed: true }
       ])
-      .select('id');
+      .select();
 
     if (error) {
       toast.error('Failed to save assessment result');
@@ -91,8 +90,8 @@ export const saveQuizResults = async (
       return null;
     }
     
-    // Access the id field safely with type assertion
-    const assessmentId = data[0].id as string;
+    // Access the id field safely
+    const assessmentId = data[0].id;
     
     if (!assessmentId) {
       toast.error('Failed to get valid assessment ID');
@@ -108,7 +107,7 @@ export const saveQuizResults = async (
 
     // Save the quiz responses
     const { error: responsesError } = await supabase
-      .from('user_quiz_responses' as any)
+      .from('user_quiz_responses')
       .insert(responsesWithAssessmentId);
 
     if (responsesError) {
@@ -137,9 +136,9 @@ export const saveQuizQuestions = async (questions: QuizQuestion[]) => {
 
     // Insert questions into database
     const { data, error } = await supabase
-      .from('quiz_questions' as any)
+      .from('quiz_questions')
       .insert(formattedQuestions)
-      .select('id');
+      .select();
 
     if (error) {
       throw error;
@@ -153,7 +152,7 @@ export const saveQuizQuestions = async (questions: QuizQuestion[]) => {
     return questions.map((question, index) => {
       const questionWithId = { ...question };
       if (data[index]) {
-        questionWithId.id = data[index].id as string;
+        questionWithId.id = data[index].id;
       }
       return questionWithId;
     });
