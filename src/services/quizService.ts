@@ -131,7 +131,8 @@ export const saveQuizQuestions = async (questions: QuizQuestion[]) => {
       options: q.options,
       correct_answer: q.correctAnswer,
       difficulty: q.difficulty,
-      topic: q.topic
+      topic: q.topic,
+      explanation: q.explanation
     }));
 
     // Insert questions into database

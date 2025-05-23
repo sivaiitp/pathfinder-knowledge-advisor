@@ -9,7 +9,125 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      quiz_questions: {
+        Row: {
+          correct_answer: string
+          created_at: string
+          difficulty: number
+          explanation: string | null
+          id: string
+          options: string[]
+          question_text: string
+          topic: string
+        }
+        Insert: {
+          correct_answer: string
+          created_at?: string
+          difficulty?: number
+          explanation?: string | null
+          id?: string
+          options: string[]
+          question_text: string
+          topic: string
+        }
+        Update: {
+          correct_answer?: string
+          created_at?: string
+          difficulty?: number
+          explanation?: string | null
+          id?: string
+          options?: string[]
+          question_text?: string
+          topic?: string
+        }
+        Relationships: []
+      }
+      user_assessments: {
+        Row: {
+          completed: boolean
+          created_at: string
+          id: string
+          score: number
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          score: number
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          score?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_quiz_responses: {
+        Row: {
+          assessment_id: string
+          created_at: string
+          id: string
+          is_correct: boolean
+          question_id: string
+          user_answer: string
+        }
+        Insert: {
+          assessment_id: string
+          created_at?: string
+          id?: string
+          is_correct: boolean
+          question_id: string
+          user_answer: string
+        }
+        Update: {
+          assessment_id?: string
+          created_at?: string
+          id?: string
+          is_correct?: boolean
+          question_id?: string
+          user_answer?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_quiz_responses_assessment_id_fkey"
+            columns: ["assessment_id"]
+            isOneToOne: false
+            referencedRelation: "user_assessments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
