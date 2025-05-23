@@ -72,29 +72,27 @@ export const saveQuizResults = async (
   }>
 ) => {
   try {
-    // Use a type assertion to bypass TypeScript's table checking and explicitly handle the result
-    const result = await supabase
+    // Create a new assessment record
+    const { data, error } = await supabase
       .from('user_assessments' as any)
       .insert([
         { user_id: userId, score, completed: true }
       ])
-      .select('id')
-      .single();
+      .select('id');
 
-    if (result.error) {
+    if (error) {
       toast.error('Failed to save assessment result');
       return null;
     }
 
     // Safely access the id property by first checking if data exists
-    if (!result.data) {
+    if (!data || data.length === 0) {
       toast.error('Failed to get assessment data');
       return null;
     }
     
-    // Access the id field directly from the result data object
-    // Using type assertion to assure TypeScript that the id property exists
-    const assessmentId = (result.data as { id: string }).id;
+    // Access the id field safely with type assertion
+    const assessmentId = data[0].id as string;
     
     if (!assessmentId) {
       toast.error('Failed to get valid assessment ID');
@@ -108,7 +106,7 @@ export const saveQuizResults = async (
       is_correct: response.isCorrect
     }));
 
-    // Use a type assertion to bypass TypeScript's table checking
+    // Save the quiz responses
     const { error: responsesError } = await supabase
       .from('user_quiz_responses' as any)
       .insert(responsesWithAssessmentId);
@@ -137,26 +135,28 @@ export const saveQuizQuestions = async (questions: QuizQuestion[]) => {
       topic: q.topic
     }));
 
-    // Use a type assertion to bypass TypeScript's table checking
-    const result = await supabase
+    // Insert questions into database
+    const { data, error } = await supabase
       .from('quiz_questions' as any)
       .insert(formattedQuestions)
       .select('id');
 
-    if (result.error) {
-      throw result.error;
+    if (error) {
+      throw error;
     }
     
-    if (!result.data) {
+    if (!data || data.length === 0) {
       return questions; // Return the original questions if no data was returned
     }
     
     // Map the returned IDs to the original questions
-    // Using type assertion to assure TypeScript that each item has an id property
-    return result.data.map((item: any, index: number) => ({
-      ...questions[index],
-      id: (item as { id: string }).id
-    }));
+    return questions.map((question, index) => {
+      const questionWithId = { ...question };
+      if (data[index]) {
+        questionWithId.id = data[index].id as string;
+      }
+      return questionWithId;
+    });
   } catch (error: any) {
     console.error('Error saving questions:', error);
     toast.error('Failed to save quiz questions');
