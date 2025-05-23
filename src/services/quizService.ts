@@ -72,8 +72,8 @@ export const saveQuizResults = async (
   }>
 ) => {
   try {
-    // Use a type assertion to bypass TypeScript's table checking
-    const { data, error } = await supabase
+    // Use a type assertion to bypass TypeScript's table checking and explicitly handle the result
+    const result = await supabase
       .from('user_assessments' as any)
       .insert([
         { user_id: userId, score, completed: true }
@@ -81,18 +81,24 @@ export const saveQuizResults = async (
       .select('id')
       .single();
 
-    if (error) {
+    if (result.error) {
       toast.error('Failed to save assessment result');
       return null;
     }
 
-    // Make sure data exists and has an id property
-    if (!data || typeof data.id === 'undefined') {
-      toast.error('Failed to get assessment ID');
+    // Safely access the id property by first checking if data exists
+    if (!result.data) {
+      toast.error('Failed to get assessment data');
       return null;
     }
-
-    const assessmentId = data.id;
+    
+    // Access the id field directly from the result data object
+    const assessmentId = result.data.id;
+    
+    if (!assessmentId) {
+      toast.error('Failed to get valid assessment ID');
+      return null;
+    }
 
     const responsesWithAssessmentId = responses.map(response => ({
       assessment_id: assessmentId,
@@ -131,15 +137,21 @@ export const saveQuizQuestions = async (questions: QuizQuestion[]) => {
     }));
 
     // Use a type assertion to bypass TypeScript's table checking
-    const { data, error } = await supabase
+    const result = await supabase
       .from('quiz_questions' as any)
       .insert(formattedQuestions)
       .select('id');
 
-    if (error) throw error;
+    if (result.error) {
+      throw result.error;
+    }
+    
+    if (!result.data) {
+      return questions; // Return the original questions if no data was returned
+    }
     
     // Map the returned IDs to the original questions
-    return data.map((item: any, index: number) => ({
+    return result.data.map((item: any, index: number) => ({
       ...questions[index],
       id: item.id
     }));
