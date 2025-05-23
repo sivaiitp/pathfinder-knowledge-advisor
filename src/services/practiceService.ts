@@ -26,18 +26,18 @@ export interface UserProblemAttempt {
 // Fetch practice problems with user progress
 export const fetchUserPracticeProblems = async (userId: string): Promise<PracticeProblem[] | null> => {
   try {
-    // Fetch all practice problems - using type assertion to bypass TypeScript constraints
+    // Fetch all practice problems
     const { data: problemsData, error: problemsError } = await supabase
-      .from('practice_problems' as any)
+      .from('practice_problems')
       .select('*')
       .order('difficulty');
     
     if (problemsError) throw problemsError;
     if (!problemsData) return [];
     
-    // Fetch user attempts for these problems - using type assertion to bypass TypeScript constraints
+    // Fetch user attempts for these problems
     const { data: attemptsData, error: attemptsError } = await supabase
-      .from('user_problem_attempts' as any)
+      .from('user_problem_attempts')
       .select('*')
       .eq('user_id', userId);
     
@@ -75,7 +75,7 @@ export const updateProblemProgress = async (
   try {
     // Check if there's already an attempt for this problem
     const { data: existingAttempt, error: selectError } = await supabase
-      .from('user_problem_attempts' as any)
+      .from('user_problem_attempts')
       .select('*')
       .eq('user_id', userId)
       .eq('problem_id', problemId)
@@ -86,7 +86,7 @@ export const updateProblemProgress = async (
     if (existingAttempt) {
       // Update existing attempt
       const { error: updateError } = await supabase
-        .from('user_problem_attempts' as any)
+        .from('user_problem_attempts')
         .update({ 
           completed,
           code_submission: codeSubmission || existingAttempt.code_submission,
@@ -98,7 +98,7 @@ export const updateProblemProgress = async (
     } else {
       // Create new attempt
       const { error: insertError } = await supabase
-        .from('user_problem_attempts' as any)
+        .from('user_problem_attempts')
         .insert({
           user_id: userId,
           problem_id: problemId,
@@ -121,7 +121,7 @@ export const updateProblemProgress = async (
 export const getPracticeProblem = async (problemId: string): Promise<PracticeProblem | null> => {
   try {
     const { data, error } = await supabase
-      .from('practice_problems' as any)
+      .from('practice_problems')
       .select('*')
       .eq('id', problemId)
       .maybeSingle();
@@ -133,6 +133,47 @@ export const getPracticeProblem = async (problemId: string): Promise<PracticePro
   } catch (error: any) {
     console.error('Error fetching practice problem:', error);
     toast.error('Failed to load practice problem');
+    return null;
+  }
+};
+
+// Generate AI practice problems based on assessment results
+export const generatePracticeProblems = async (
+  userId: string,
+  assessmentId: string,
+  targetCompany: string,
+  targetRole: string,
+  count: number = 5
+): Promise<PracticeProblem[] | null> => {
+  try {
+    // Call the edge function to generate practice problems
+    const { data: problemsData, error } = await supabase.functions.invoke('generate-practice-problems', {
+      body: { 
+        userId,
+        assessmentId,
+        targetCompany,
+        targetRole,
+        count
+      }
+    });
+
+    if (error) throw error;
+    if (!problemsData || !problemsData.problems || !Array.isArray(problemsData.problems)) {
+      throw new Error('Invalid response format from AI');
+    }
+    
+    // Store the generated problems in the database
+    const { error: insertError } = await supabase
+      .from('practice_problems')
+      .insert(problemsData.problems);
+      
+    if (insertError) throw insertError;
+    
+    // Return the newly created problems
+    return problemsData.problems as PracticeProblem[];
+  } catch (error: any) {
+    console.error('Error generating practice problems:', error);
+    toast.error('Failed to generate practice problems');
     return null;
   }
 };

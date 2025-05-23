@@ -12,15 +12,17 @@ import {
   LayoutGrid,
   Network,
   Brain,
+  Loader2
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import AssessmentSetup from "@/components/AssessmentSetup";
 import Quiz from "@/components/Quiz";
 import { useAuth } from "@/contexts/AuthContext";
 import { generateQuiz, saveQuizResults, saveQuizQuestions, checkUserAssessment, QuizQuestion } from "@/services/quizService";
-import { fetchUserRoadmap, updateTopicProgress, RoadmapSection } from "@/services/roadmapService";
-import { fetchUserPracticeProblems, updateProblemProgress, PracticeProblem } from "@/services/practiceService";
+import { fetchUserRoadmap, updateTopicProgress, RoadmapSection, generateAIRoadmap } from "@/services/roadmapService";
+import { fetchUserPracticeProblems, updateProblemProgress, PracticeProblem, generatePracticeProblems } from "@/services/practiceService";
 import { toast } from "@/components/ui/sonner";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
   const [progress, setProgress] = useState(0);
@@ -28,6 +30,7 @@ const Dashboard = () => {
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState<boolean | null>(null);
   const [isLoadingAssessment, setIsLoadingAssessment] = useState(true);
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [isGeneratingRoadmap, setIsGeneratingRoadmap] = useState(false);
   const [currentView, setCurrentView] = useState<'dashboard' | 'setup' | 'quiz'>('dashboard');
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [roadmapData, setRoadmapData] = useState<RoadmapSection[]>([]);
@@ -35,6 +38,8 @@ const Dashboard = () => {
   const [isLoadingRoadmap, setIsLoadingRoadmap] = useState(false);
   const [isLoadingProblems, setIsLoadingProblems] = useState(false);
   const [userInfoLoading, setUserInfoLoading] = useState(true);
+  const [latestAssessment, setLatestAssessment] = useState<string | null>(null);
+  const navigate = useNavigate();
   const [userInfo, setUserInfo] = useState({
     name: "",
     role: "",
@@ -50,6 +55,7 @@ const Dashboard = () => {
         setHasCompletedAssessment(!!assessment);
         
         if (assessment) {
+          setLatestAssessment(assessment.id);
           // After confirming assessment is done, load roadmap data and practice problems
           loadUserRoadmap();
           loadPracticeProblems();
@@ -131,6 +137,74 @@ const Dashboard = () => {
     }
   };
   
+  // Generate a personalized roadmap using AI
+  const generatePersonalizedRoadmap = async () => {
+    if (!user || !latestAssessment) {
+      toast.error("Assessment information not available");
+      return;
+    }
+
+    try {
+      setIsGeneratingRoadmap(true);
+      toast.info("Generating your personalized roadmap...");
+      
+      const result = await generateAIRoadmap({
+        userId: user.id,
+        assessmentId: latestAssessment,
+        targetRole: userInfo.role,
+        targetCompany: userInfo.company !== "Not specified" ? userInfo.company : undefined,
+        interviewDate: new Date(Date.now() + (userInfo.daysLeft * 24 * 60 * 60 * 1000)).toISOString()
+      });
+      
+      if (result.roadmapId) {
+        toast.success("Personalized roadmap created!");
+        
+        // Generate practice problems also
+        await generatePersonalizedProblems();
+        
+        // Reload the roadmap data to show new topics
+        loadUserRoadmap();
+      } else {
+        toast.error("Failed to create personalized roadmap");
+      }
+    } catch (error) {
+      console.error("Error generating roadmap:", error);
+      toast.error("Failed to create personalized roadmap");
+    } finally {
+      setIsGeneratingRoadmap(false);
+    }
+  };
+  
+  // Generate personalized practice problems using AI
+  const generatePersonalizedProblems = async () => {
+    if (!user || !latestAssessment) {
+      toast.error("Assessment information not available");
+      return;
+    }
+
+    try {
+      toast.info("Generating practice problems...");
+      
+      const problems = await generatePracticeProblems(
+        user.id,
+        latestAssessment,
+        userInfo.company !== "Not specified" ? userInfo.company : "Generic",
+        userInfo.role,
+        5 // Generate 5 problems by default
+      );
+      
+      if (problems) {
+        toast.success("Practice problems created!");
+        
+        // Reload problems
+        loadPracticeProblems();
+      }
+    } catch (error) {
+      console.error("Error generating problems:", error);
+      toast.error("Failed to create practice problems");
+    }
+  };
+  
   const handleTopicStatusChange = async (topicId: string, completed: boolean) => {
     if (!user) {
       toast.error("You need to be logged in to track progress");
@@ -208,16 +282,16 @@ const Dashboard = () => {
       
       if (assessmentId) {
         setHasCompletedAssessment(true);
+        setLatestAssessment(assessmentId);
         
-        // After saving assessment, load roadmap data and practice problems
-        loadUserRoadmap();
-        loadPracticeProblems();
+        // Switch back to dashboard and show roadmap generation option
+        setCurrentView('dashboard');
+        toast.success("Assessment completed! Score: " + score + "%");
         
-        // Give the user some time to review their answers before returning to dashboard
+        // Automatically start generating the roadmap
         setTimeout(() => {
-          setCurrentView('dashboard');
-          toast.success("Assessment results saved successfully!");
-        }, 5000);
+          generatePersonalizedRoadmap();
+        }, 1500);
       } else {
         toast.error("Failed to save assessment results.");
       }
@@ -276,7 +350,41 @@ const Dashboard = () => {
           </Card>
         )}
         
-        {hasCompletedAssessment && (
+        {hasCompletedAssessment && roadmapData.length === 0 && !isLoadingRoadmap && (
+          <Card className="mb-8 border-brand-200 bg-brand-50">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Network className="mr-2 h-5 w-5 text-brand-600" />
+                Generate Your Personalized Roadmap
+              </CardTitle>
+              <CardDescription>
+                Create a customized learning roadmap based on your assessment results
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                We'll analyze your assessment results and create a personalized roadmap tailored to your target role
+                and company. This will help you focus your preparation on the areas that matter most.
+              </p>
+              <Button 
+                onClick={generatePersonalizedRoadmap}
+                className="bg-brand-600 hover:bg-brand-700"
+                disabled={isGeneratingRoadmap}
+              >
+                {isGeneratingRoadmap ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  "Generate Roadmap"
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+        
+        {hasCompletedAssessment && roadmapData.length > 0 && (
           <>
             {/* Progress Section */}
             <Card className="mb-8">
@@ -383,16 +491,38 @@ const Dashboard = () => {
               {/* Practice Problems Content */}
               <TabsContent value="practice" className="space-y-4">
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Recommended Practice Problems</CardTitle>
-                    <CardDescription>
-                      Based on your role and target company
-                    </CardDescription>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle>Recommended Practice Problems</CardTitle>
+                      <CardDescription>
+                        Based on your role and target company
+                      </CardDescription>
+                    </div>
+                    {practiceProblems.length > 0 && (
+                      <Button 
+                        size="sm" 
+                        onClick={generatePersonalizedProblems}
+                        variant="outline"
+                        className="border-brand-500 text-brand-600 hover:bg-brand-50"
+                      >
+                        Generate More
+                      </Button>
+                    )}
                   </CardHeader>
                   <CardContent>
                     {isLoadingProblems ? (
                       <div className="flex items-center justify-center p-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+                      </div>
+                    ) : practiceProblems.length === 0 ? (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground mb-4">No practice problems available yet.</p>
+                        <Button 
+                          onClick={generatePersonalizedProblems}
+                          className="bg-brand-600 hover:bg-brand-700"
+                        >
+                          Generate Problems
+                        </Button>
                       </div>
                     ) : (
                       <div className="space-y-4">
@@ -482,7 +612,10 @@ const Dashboard = () => {
               </div>
             </div>
             <div className="mt-4 sm:mt-0">
-              <Button className="bg-brand-600 hover:bg-brand-700">
+              <Button 
+                className="bg-brand-600 hover:bg-brand-700"
+                onClick={() => navigate('/profile')}
+              >
                 Update Preferences
               </Button>
             </div>
