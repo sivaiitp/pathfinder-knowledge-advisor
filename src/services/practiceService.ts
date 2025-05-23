@@ -42,7 +42,8 @@ export const fetchUserPracticeProblems = async (userId: string): Promise<Practic
     
     if (completedProblems && Array.isArray(completedProblems)) {
       completedProblems.forEach((item) => {
-        if (item && typeof item === 'object' && 'problem_id' in item && item.problem_id !== null) {
+        // Ensure item exists and has the expected property before accessing it
+        if (item !== null && typeof item === 'object' && 'problem_id' in item && item.problem_id !== null) {
           completedProblemIds.add(item.problem_id);
         }
       });
