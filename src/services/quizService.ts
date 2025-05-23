@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 
@@ -12,6 +11,12 @@ export interface QuizQuestion {
   topic: string;
 }
 
+export interface QuizResponse {
+  questionId: string;
+  userAnswer: string;
+  isCorrect: boolean;
+}
+
 export interface AssessmentResult {
   id: string;
   userId: string;
@@ -21,17 +26,19 @@ export interface AssessmentResult {
 }
 
 // Check if a user has completed the assessment
-export const checkUserAssessment = async (userId: string) => {
+export const checkUserAssessment = async (userId: string): Promise<{ id: string; score: number } | null> => {
   try {
     const { data, error } = await supabase
       .from('user_assessments')
       .select('*')
       .eq('user_id', userId)
       .eq('completed', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error) throw error;
-    return data;
+    return data as { id: string; score: number } | null;
   } catch (error: any) {
     console.error('Error checking assessment:', error);
     return null;
@@ -64,102 +71,62 @@ export const generateQuiz = async (userPreferences: {
 export const saveQuizResults = async (
   userId: string,
   score: number,
-  responses: Array<{
-    questionId: string;
-    userAnswer: string;
-    isCorrect: boolean;
-  }>
-) => {
+  responses: QuizResponse[]
+): Promise<string | null> => {
   try {
-    // Create a new assessment record
-    const { data, error } = await supabase
+    // First create assessment record
+    const { data: assessmentData, error: assessmentError } = await supabase
       .from('user_assessments')
-      .insert([
-        { user_id: userId, score, completed: true }
-      ])
-      .select();
-
-    if (error) {
-      toast.error('Failed to save assessment result');
-      return null;
-    }
-
-    // Safely access the id property by first checking if data exists
-    if (!data || data.length === 0) {
-      toast.error('Failed to get assessment data');
-      return null;
-    }
+      .insert({
+        user_id: userId,
+        score,
+        completed: true
+      })
+      .select()
+      .single();
     
-    // Access the id field safely
-    const assessmentId = data[0].id;
+    if (assessmentError) throw assessmentError;
+    if (!assessmentData) throw new Error('Failed to create assessment record');
     
-    if (!assessmentId) {
-      toast.error('Failed to get valid assessment ID');
-      return null;
-    }
-
-    const responsesWithAssessmentId = responses.map(response => ({
+    const assessmentId = assessmentData.id;
+    
+    // Then save all the user responses
+    const userResponses = responses.map(response => ({
       assessment_id: assessmentId,
       question_id: response.questionId,
       user_answer: response.userAnswer,
       is_correct: response.isCorrect
     }));
-
-    // Save the quiz responses
+    
     const { error: responsesError } = await supabase
       .from('user_quiz_responses')
-      .insert(responsesWithAssessmentId);
-
-    if (responsesError) {
-      toast.error('Failed to save quiz responses');
-      return null;
-    }
-
+      .insert(userResponses);
+    
+    if (responsesError) throw responsesError;
+    
     return assessmentId;
   } catch (error: any) {
     console.error('Error saving quiz results:', error);
-    toast.error('Failed to save quiz results: ' + (error.message || 'Unknown error'));
+    toast.error('Failed to save quiz results');
     return null;
   }
 };
 
 // Save AI-generated questions to the database
-export const saveQuizQuestions = async (questions: QuizQuestion[]) => {
+export const saveQuizQuestions = async (questions: QuizQuestion[]): Promise<QuizQuestion[] | null> => {
   try {
-    const formattedQuestions = questions.map(q => ({
-      question_text: q.question,
-      options: q.options,
-      correct_answer: q.correctAnswer,
-      difficulty: q.difficulty,
-      topic: q.topic,
-      explanation: q.explanation
-    }));
-
-    // Insert questions into database
     const { data, error } = await supabase
       .from('quiz_questions')
-      .insert(formattedQuestions)
+      .insert(questions)
       .select();
-
-    if (error) {
-      throw error;
-    }
     
-    if (!data || data.length === 0) {
-      return questions; // Return the original questions if no data was returned
-    }
+    if (error) throw error;
+    if (!data) return null;
     
-    // Map the returned IDs to the original questions
-    return questions.map((question, index) => {
-      const questionWithId = { ...question };
-      if (data[index]) {
-        questionWithId.id = data[index].id;
-      }
-      return questionWithId;
-    });
+    return data as QuizQuestion[];
   } catch (error: any) {
-    console.error('Error saving questions:', error);
+    console.error('Error saving quiz questions:', error);
     toast.error('Failed to save quiz questions');
-    return questions; // Return the original questions without IDs
+    return null;
   }
 };

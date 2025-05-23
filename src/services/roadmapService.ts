@@ -1,219 +1,148 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 
 export interface LearningTopic {
   id: string;
-  title: string;
-  description: string | null;
-  category: string;
-  difficulty: number;
-  created_at: string;
-  completed?: boolean; // Used when joining with user_progress
-}
-
-export interface UserProgress {
-  id: string;
-  user_id: string;
-  topic_id: string;
+  name: string;
+  description?: string | null;
   completed: boolean;
-  started_at: string;
-  completed_at: string | null;
 }
 
 export interface RoadmapSection {
   id: string;
   title: string;
+  topics: LearningTopic[];
   completed: number;
   total: number;
-  topics: {
-    id: string;
-    name: string;
-    completed: boolean;
-    description?: string | null;
-  }[];
 }
 
-// Fetch learning topics and user progress
+// Fetch user's learning roadmap from the database
 export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[] | null> => {
   try {
-    // Fetch all topics
-    const { data: topicsData, error: topicsError } = await supabase
-      .from('learning_topics')
-      .select('*')
-      .order('difficulty', { ascending: true });
-
-    if (topicsError) throw topicsError;
-    if (!topicsData) return [];
-    
-    // Fetch user progress for these topics
-    const { data: progressData, error: progressError } = await supabase
-      .from('user_progress')
-      .select('*')
+    // Fetch AI-generated roadmap metadata for the user
+    const { data: roadmapData, error: roadmapError } = await supabase
+      .from('ai_generated_roadmaps')
+      .select('id, target_role, target_company, interview_date')
       .eq('user_id', userId);
     
-    if (progressError) throw progressError;
+    if (roadmapError) throw roadmapError;
+    if (!roadmapData || roadmapData.length === 0) return [];
     
-    // Create a map of topic_id -> completed status
-    const topicProgressMap = new Map();
-    if (progressData) {
-      progressData.forEach((progress: any) => {
-        topicProgressMap.set(progress.topic_id, progress.completed);
-      });
-    }
+    // Fetch learning topics for each roadmap
+    const roadmapSections: RoadmapSection[] = [];
     
-    // Group topics by category and build roadmap sections
-    const categoriesMap = new Map<string, any[]>();
-    
-    if (topicsData) {
-      topicsData.forEach((topic: any) => {
-        if (!categoriesMap.has(topic.category)) {
-          categoriesMap.set(topic.category, []);
-        }
-        
-        // Add completed status to topic
-        const topicWithProgress = {
-          ...topic,
-          completed: topicProgressMap.has(topic.id) ? topicProgressMap.get(topic.id) : false
-        };
-        
-        const topics = categoriesMap.get(topic.category);
-        if (topics) {
-          topics.push(topicWithProgress);
-        }
-      });
-    }
-    
-    // Convert map to array of roadmap sections
-    const roadmap: RoadmapSection[] = [];
-    
-    categoriesMap.forEach((topics, category) => {
-      const completedCount = topics.filter(topic => topic.completed).length;
+    for (const roadmap of roadmapData) {
+      const { data: topicsData, error: topicsError } = await supabase
+        .from('learning_topics')
+        .select('*')
+        .eq('roadmap_id', roadmap.id);
       
-      roadmap.push({
-        id: category.toLowerCase().replace(/\s+/g, '-'),
-        title: category,
-        completed: completedCount,
-        total: topics.length,
-        topics: topics.map(topic => ({
-          id: topic.id,
-          name: topic.title,
-          completed: topic.completed || false,
-          description: topic.description
-        }))
+      if (topicsError) throw topicsError;
+      if (!topicsData) continue;
+      
+      // Transform the topics data into LearningTopic objects
+      const learningTopics: LearningTopic[] = topicsData.map((topic: any) => ({
+        id: topic.id,
+        name: topic.name,
+        description: topic.description,
+        completed: topic.completed
+      }));
+      
+      // Calculate completed and total topics
+      const completedTopics = learningTopics.filter(topic => topic.completed).length;
+      const totalTopics = learningTopics.length;
+      
+      // Add the roadmap section to the result
+      roadmapSections.push({
+        id: roadmap.id,
+        title: roadmap.target_role,
+        topics: learningTopics,
+        completed: completedTopics,
+        total: totalTopics
       });
-    });
+    }
     
-    return roadmap;
+    return roadmapSections;
   } catch (error: any) {
-    console.error('Error fetching roadmap:', error);
+    console.error('Error fetching user roadmap:', error);
     toast.error('Failed to load your learning roadmap');
     return null;
   }
 };
 
-// Update user progress for a specific topic
+// Update topic completion status in the database
 export const updateTopicProgress = async (userId: string, topicId: string, completed: boolean): Promise<boolean> => {
   try {
-    // Check if there's already a progress entry for this topic
-    const { data: existingProgress, error: selectError } = await supabase
-      .from('user_progress')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('topic_id', topicId)
-      .maybeSingle();
+    const { error } = await supabase
+      .from('learning_topics')
+      .update({ completed })
+      .eq('id', topicId);
     
-    if (selectError) throw selectError;
-    
-    if (existingProgress) {
-      // Update existing progress
-      const { error: updateError } = await supabase
-        .from('user_progress')
-        .update({ 
-          completed,
-          completed_at: completed ? new Date().toISOString() : null
-        })
-        .eq('id', existingProgress.id);
-      
-      if (updateError) throw updateError;
-    } else {
-      // Create new progress entry
-      const { error: insertError } = await supabase
-        .from('user_progress')
-        .insert({
-          user_id: userId,
-          topic_id: topicId,
-          completed,
-          completed_at: completed ? new Date().toISOString() : null
-        });
-      
-      if (insertError) throw insertError;
-    }
-    
+    if (error) throw error;
     return true;
   } catch (error: any) {
     console.error('Error updating topic progress:', error);
-    toast.error('Failed to update your progress');
+    toast.error('Failed to update topic progress');
     return false;
   }
 };
 
-// Generate AI roadmap based on assessment results
-export interface RoadmapRequest {
+// Generate a personalized roadmap using AI based on the user's assessment results
+export const generateAIRoadmap = async (options: {
   userId: string;
   assessmentId: string;
   targetRole: string;
   targetCompany?: string;
   interviewDate?: string;
-}
-
-export const generateAIRoadmap = async (request: RoadmapRequest): Promise<{
-  roadmapId: string | null;
-  topics: LearningTopic[] | null;
-}> => {
+}): Promise<{ success: boolean; roadmapId?: string }> => {
   try {
-    // Call the edge function to generate a roadmap
-    const { data: generatedData, error } = await supabase.functions.invoke('generate-roadmap', {
-      body: request
+    // Call the edge function to generate the roadmap
+    const { data: roadmapData, error } = await supabase.functions.invoke('generate-roadmap', {
+      body: options
     });
-
+    
     if (error) throw error;
-    if (!generatedData || !generatedData.topics || !Array.isArray(generatedData.topics)) {
+    
+    if (!roadmapData || !roadmapData.roadmap || !roadmapData.topics) {
       throw new Error('Invalid response format from AI');
     }
     
-    // Store the generated roadmap
-    const { data: roadmapData, error: roadmapError } = await supabase
+    // First, store the roadmap metadata
+    const { data: roadmapRecord, error: roadmapError } = await supabase
       .from('ai_generated_roadmaps')
       .insert({
-        user_id: request.userId,
-        assessment_id: request.assessmentId,
-        target_role: request.targetRole,
-        target_company: request.targetCompany || null,
-        interview_date: request.interviewDate ? new Date(request.interviewDate).toISOString() : null
+        user_id: options.userId,
+        assessment_id: options.assessmentId,
+        target_role: options.targetRole,
+        target_company: options.targetCompany || null,
+        interview_date: options.interviewDate ? new Date(options.interviewDate).toISOString() : null
       })
-      .select('id')
+      .select()
       .single();
-    
+      
     if (roadmapError) throw roadmapError;
+    if (!roadmapRecord) throw new Error('Failed to create roadmap record');
     
-    // Store the generated topics
+    const roadmapId = roadmapRecord.id;
+    
+    // Next, store all the learning topics
     const { error: topicsError } = await supabase
       .from('learning_topics')
-      .insert(generatedData.topics);
-      
+      .insert(roadmapData.topics.map((topic: any) => ({
+        ...topic,
+        roadmap_id: roadmapId
+      })));
+    
     if (topicsError) throw topicsError;
     
+    // Return success
     return {
-      roadmapId: roadmapData?.id || null,
-      topics: generatedData.topics as LearningTopic[]
+      success: true,
+      roadmapId
     };
   } catch (error: any) {
-    console.error('Error generating roadmap:', error);
-    toast.error('Failed to generate learning roadmap');
-    return {
-      roadmapId: null,
-      topics: null
-    };
+    console.error('Error generating AI roadmap:', error);
+    toast.error('Failed to generate your personalized roadmap');
+    return { success: false };
   }
 };

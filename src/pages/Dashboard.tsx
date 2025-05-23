@@ -1,19 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  CheckCircle2,
-  Clock,
-  Code,
-  FileText,
-  LayoutGrid,
-  Network,
-  Brain,
-  Loader2
-} from "lucide-react";
+import { toast } from "@/components/ui/sonner";
 import Navbar from "@/components/Navbar";
 import AssessmentSetup from "@/components/AssessmentSetup";
 import Quiz from "@/components/Quiz";
@@ -21,8 +8,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { generateQuiz, saveQuizResults, saveQuizQuestions, checkUserAssessment, QuizQuestion } from "@/services/quizService";
 import { fetchUserRoadmap, updateTopicProgress, RoadmapSection, generateAIRoadmap } from "@/services/roadmapService";
 import { fetchUserPracticeProblems, updateProblemProgress, PracticeProblem, generatePracticeProblems } from "@/services/practiceService";
-import { toast } from "@/components/ui/sonner";
-import { useNavigate } from "react-router-dom";
+
+// Import the refactored components
+import UserHeader from "@/components/dashboard/UserHeader";
+import DashboardContent from "@/components/dashboard/DashboardContent";
 
 const Dashboard = () => {
   const [progress, setProgress] = useState(0);
@@ -39,7 +28,6 @@ const Dashboard = () => {
   const [isLoadingProblems, setIsLoadingProblems] = useState(false);
   const [userInfoLoading, setUserInfoLoading] = useState(true);
   const [latestAssessment, setLatestAssessment] = useState<string | null>(null);
-  const navigate = useNavigate();
   const [userInfo, setUserInfo] = useState({
     name: "",
     role: "",
@@ -156,7 +144,7 @@ const Dashboard = () => {
         interviewDate: new Date(Date.now() + (userInfo.daysLeft * 24 * 60 * 60 * 1000)).toISOString()
       });
       
-      if (result.roadmapId) {
+      if (result.success) {
         toast.success("Personalized roadmap created!");
         
         // Generate practice problems also
@@ -302,17 +290,6 @@ const Dashboard = () => {
   };
   
   const renderContent = () => {
-    if (isLoadingAssessment) {
-      return (
-        <div className="flex items-center justify-center p-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto"></div>
-            <p className="mt-4 text-lg">Loading your assessment status...</p>
-          </div>
-        </div>
-      );
-    }
-    
     if (currentView === 'setup') {
       return <AssessmentSetup onStartQuiz={handleStartQuiz} isLoading={isGeneratingQuiz} />;
     }
@@ -323,267 +300,21 @@ const Dashboard = () => {
     
     // Default dashboard view
     return (
-      <>
-        {!hasCompletedAssessment && (
-          <Card className="mb-8 border-brand-200 bg-brand-50">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Brain className="mr-2 h-5 w-5 text-brand-600" />
-                Technical Assessment Required
-              </CardTitle>
-              <CardDescription>
-                Complete a short assessment to help us create your personalized interview roadmap
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                Before we can create a tailored roadmap for your interview preparation, we need to assess your
-                current skill level. This will help us identify areas where you need to focus.
-              </p>
-              <Button 
-                onClick={handleStartAssessment}
-                className="bg-brand-600 hover:bg-brand-700"
-              >
-                Start Assessment
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-        
-        {hasCompletedAssessment && roadmapData.length === 0 && !isLoadingRoadmap && (
-          <Card className="mb-8 border-brand-200 bg-brand-50">
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Network className="mr-2 h-5 w-5 text-brand-600" />
-                Generate Your Personalized Roadmap
-              </CardTitle>
-              <CardDescription>
-                Create a customized learning roadmap based on your assessment results
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                We'll analyze your assessment results and create a personalized roadmap tailored to your target role
-                and company. This will help you focus your preparation on the areas that matter most.
-              </p>
-              <Button 
-                onClick={generatePersonalizedRoadmap}
-                className="bg-brand-600 hover:bg-brand-700"
-                disabled={isGeneratingRoadmap}
-              >
-                {isGeneratingRoadmap ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  "Generate Roadmap"
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-        
-        {hasCompletedAssessment && roadmapData.length > 0 && (
-          <>
-            {/* Progress Section */}
-            <Card className="mb-8">
-              <CardHeader>
-                <CardTitle>Overall Progress</CardTitle>
-                <CardDescription>
-                  Track your interview preparation progress
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm font-medium">
-                      {progress}% Complete
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {roadmapData.reduce((acc, section) => acc + section.completed, 0)}/
-                      {roadmapData.reduce((acc, section) => acc + section.total, 0)} topics
-                    </span>
-                  </div>
-                  <Progress value={progress} className="h-2" />
-                </div>
-              </CardContent>
-              <CardFooter>
-                <p className="text-sm text-muted-foreground">
-                  Based on your interview date, you should complete 2 more topics this week.
-                </p>
-              </CardFooter>
-            </Card>
-
-            {/* Roadmap & Practice Tabs */}
-            <Tabs defaultValue="roadmap" className="space-y-4">
-              <TabsList>
-                <TabsTrigger value="roadmap" className="flex items-center gap-2">
-                  <LayoutGrid className="h-4 w-4" />
-                  <span>Roadmap</span>
-                </TabsTrigger>
-                <TabsTrigger value="practice" className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  <span>Practice Problems</span>
-                </TabsTrigger>
-              </TabsList>
-              
-              {/* Roadmap Content */}
-              <TabsContent value="roadmap" className="space-y-4">
-                {isLoadingRoadmap ? (
-                  <div className="flex items-center justify-center p-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {roadmapData.map((section) => (
-                      <Card key={section.id} className="card-hover">
-                        <CardHeader>
-                          <CardTitle>{section.title}</CardTitle>
-                          <CardDescription>
-                            {section.completed}/{section.total} topics completed
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <Progress 
-                            value={(section.completed / section.total) * 100} 
-                            className="h-2 mb-4" 
-                          />
-                          <ul className="space-y-2">
-                            {section.topics.map((topic) => (
-                              <li key={topic.id} className="flex items-center">
-                                <div
-                                  className="mr-2 cursor-pointer"
-                                  onClick={() => handleTopicStatusChange(topic.id, !topic.completed)}
-                                >
-                                  {topic.completed ? (
-                                    <CheckCircle2 className="h-5 w-5 text-green-500" />
-                                  ) : (
-                                    <div className="h-5 w-5 rounded-full border border-gray-300 hover:border-brand-500" />
-                                  )}
-                                </div>
-                                <div className="flex-1">
-                                  <span className={topic.completed ? "line-through text-muted-foreground" : ""}>
-                                    {topic.name}
-                                  </span>
-                                  {topic.description && (
-                                    <p className="text-xs text-gray-500 mt-0.5">{topic.description}</p>
-                                  )}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        </CardContent>
-                        <CardFooter>
-                          <Button 
-                            variant="outline" 
-                            className="w-full border-brand-500 text-brand-600 hover:bg-brand-50"
-                          >
-                            Start Learning
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-              
-              {/* Practice Problems Content */}
-              <TabsContent value="practice" className="space-y-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle>Recommended Practice Problems</CardTitle>
-                      <CardDescription>
-                        Based on your role and target company
-                      </CardDescription>
-                    </div>
-                    {practiceProblems.length > 0 && (
-                      <Button 
-                        size="sm" 
-                        onClick={generatePersonalizedProblems}
-                        variant="outline"
-                        className="border-brand-500 text-brand-600 hover:bg-brand-50"
-                      >
-                        Generate More
-                      </Button>
-                    )}
-                  </CardHeader>
-                  <CardContent>
-                    {isLoadingProblems ? (
-                      <div className="flex items-center justify-center p-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
-                      </div>
-                    ) : practiceProblems.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground mb-4">No practice problems available yet.</p>
-                        <Button 
-                          onClick={generatePersonalizedProblems}
-                          className="bg-brand-600 hover:bg-brand-700"
-                        >
-                          Generate Problems
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {practiceProblems.map((problem) => (
-                          <div 
-                            key={problem.id} 
-                            className="p-4 border border-gray-100 rounded-lg flex items-center justify-between"
-                          >
-                            <div>
-                              <div className="flex items-center mb-1">
-                                <h4 className="font-medium">
-                                  {problem.title}
-                                </h4>
-                                {problem.completed && (
-                                  <span className="ml-3 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                                    Completed
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center text-sm text-gray-500">
-                                <span className={`mr-2 px-2 py-0.5 rounded-full text-xs ${
-                                  problem.difficulty === "Easy" ? "bg-green-100 text-green-700" : 
-                                  problem.difficulty === "Medium" ? "bg-yellow-100 text-yellow-700" :
-                                  "bg-red-100 text-red-700"
-                                }`}>
-                                  {problem.difficulty}
-                                </span>
-                                {problem.tags.map((tag, i) => (
-                                  <span key={i} className="mr-2">{tag}{i < problem.tags.length - 1 ? "," : ""}</span>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="flex items-center">
-                              <span className={`text-xs mr-4 px-2 py-1 rounded-full ${
-                                problem.company_relevance === "High" ? "bg-brand-100 text-brand-700" :
-                                "bg-gray-100 text-gray-700"
-                              }`}>
-                                {problem.company_relevance} relevance
-                              </span>
-                              <Button 
-                                size="sm" 
-                                onClick={() => handleProblemAction(problem.id, !problem.completed)}
-                                variant={problem.completed ? "outline" : "default"}
-                                className={problem.completed ? 
-                                  "border-brand-500 text-brand-600 hover:bg-brand-50" : 
-                                  "bg-brand-600 hover:bg-brand-700"}
-                              >
-                                {problem.completed ? "Review" : "Solve"}
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </>
-        )}
-      </>
+      <DashboardContent
+        hasCompletedAssessment={hasCompletedAssessment}
+        isLoadingAssessment={isLoadingAssessment}
+        isGeneratingRoadmap={isGeneratingRoadmap}
+        roadmapData={roadmapData}
+        isLoadingRoadmap={isLoadingRoadmap}
+        progress={progress}
+        practiceProblems={practiceProblems}
+        isLoadingProblems={isLoadingProblems}
+        onStartAssessment={handleStartAssessment}
+        onGenerateRoadmap={generatePersonalizedRoadmap}
+        onGenerateProblems={generatePersonalizedProblems}
+        onTopicStatusChange={handleTopicStatusChange}
+        onProblemAction={handleProblemAction}
+      />
     );
   };
 
@@ -592,36 +323,7 @@ const Dashboard = () => {
       <Navbar />
       
       <main className="flex-grow container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">
-            Your Personalized Interview Roadmap
-          </h1>
-          <div className="flex items-center justify-between flex-wrap">
-            <div className="flex items-center gap-x-6 mt-2">
-              <div className="flex items-center">
-                <Code className="mr-2 h-5 w-5 text-brand-600" />
-                <span>{userInfo.role}</span>
-              </div>
-              <div className="flex items-center">
-                <Network className="mr-2 h-5 w-5 text-brand-600" />
-                <span>{userInfo.company}</span>
-              </div>
-              <div className="flex items-center">
-                <Clock className="mr-2 h-5 w-5 text-brand-600" />
-                <span>{userInfo.daysLeft} days until interview</span>
-              </div>
-            </div>
-            <div className="mt-4 sm:mt-0">
-              <Button 
-                className="bg-brand-600 hover:bg-brand-700"
-                onClick={() => navigate('/profile')}
-              >
-                Update Preferences
-              </Button>
-            </div>
-          </div>
-        </div>
-
+        <UserHeader userInfo={userInfo} />
         {renderContent()}
       </main>
 
