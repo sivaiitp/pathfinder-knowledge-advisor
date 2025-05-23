@@ -86,6 +86,12 @@ export const saveQuizResults = async (
       return null;
     }
 
+    // Make sure data exists and has an id property
+    if (!data || typeof data.id === 'undefined') {
+      toast.error('Failed to get assessment ID');
+      return null;
+    }
+
     const assessmentId = data.id;
 
     const responsesWithAssessmentId = responses.map(response => ({
