@@ -1,8 +1,11 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,14 +20,20 @@ serve(async (req) => {
 
   try {
     const { userId, assessmentId, targetRole, targetCompany, interviewDate } = await req.json();
-    const { data: client } = await (req as any).getSupabaseClient();
-
+    
     if (!openAIApiKey) {
       throw new Error('OPENAI_API_KEY is not configured');
     }
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Supabase credentials are not configured');
+    }
+
+    // Create a Supabase client with the service role key
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch assessment data to understand user's skill level
-    const { data: assessmentData, error: assessmentError } = await client
+    const { data: assessmentData, error: assessmentError } = await supabase
       .from('user_assessments')
       .select('id, score, created_at')
       .eq('id', assessmentId)
@@ -33,7 +42,7 @@ serve(async (req) => {
     if (assessmentError) throw assessmentError;
 
     // Fetch the user's quiz responses to understand their knowledge gaps
-    const { data: quizResponses, error: responsesError } = await client
+    const { data: quizResponses, error: responsesError } = await supabase
       .from('user_quiz_responses')
       .select('question_id, is_correct, user_answer')
       .eq('assessment_id', assessmentId);
@@ -43,7 +52,7 @@ serve(async (req) => {
     // Fetch the questions to understand which topics they struggled with
     const questionIds = quizResponses.map((r: any) => r.question_id);
     
-    const { data: quizQuestions, error: questionsError } = await client
+    const { data: quizQuestions, error: questionsError } = await supabase
       .from('quiz_questions')
       .select('id, question_text, topic, difficulty')
       .in('id', questionIds);

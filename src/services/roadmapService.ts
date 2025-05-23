@@ -34,7 +34,7 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
     
     for (const roadmap of roadmapData) {
       // Use type assertion to safely access roadmap.id
-      const roadmapId = (roadmap as any).id as string;
+      const roadmapId = roadmap.id as string;
       if (!roadmapId) continue; // Skip if roadmap id is missing
       
       // Query user_progress to get learning topics with completion status
@@ -75,7 +75,7 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
       if (!topicsData) continue;
       
       // Transform the topics data into LearningTopic objects
-      const learningTopics: LearningTopic[] = topicsData.map((topic: any) => ({
+      const learningTopics: LearningTopic[] = (topicsData as any[]).map((topic) => ({
         id: topic.id,
         name: topic.title,
         description: topic.description,
@@ -89,7 +89,7 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
       // Add the roadmap section to the result
       roadmapSections.push({
         id: roadmapId,
-        title: ((roadmap as any).target_role as string) || "Custom Roadmap",
+        title: (roadmap.target_role as string) || "Custom Roadmap",
         topics: learningTopics,
         completed: completedTopics,
         total: totalTopics
@@ -142,7 +142,7 @@ export const generateAIRoadmap = async (options: {
     
     if (error) throw error;
     
-    if (!roadmapData || !roadmapData.roadmap || !roadmapData.topics) {
+    if (!roadmapData || !roadmapData.topics) {
       throw new Error('Invalid response format from AI');
     }
     
@@ -163,7 +163,7 @@ export const generateAIRoadmap = async (options: {
     if (!roadmapRecord) throw new Error('Failed to create roadmap record');
     
     // Use type assertion to safely access roadmapRecord.id
-    const roadmapId = (roadmapRecord as any).id as string;
+    const roadmapId = roadmapRecord.id as string;
     
     // Map the topics to include the roadmap ID and proper structure
     // Make sure to match the schema of the learning_topics table

@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 
@@ -8,136 +7,89 @@ export interface PracticeProblem {
   description: string;
   difficulty: string;
   tags: string[];
-  company_relevance: string;
-  solution?: string | null;
-  created_at: string;
-  completed?: boolean; // Used when joining with user attempts
+  solution: string | null;
+  companyRelevance: string;
 }
 
 export interface UserProblemAttempt {
   id: string;
-  user_id: string;
-  problem_id: string;
+  problemId: string;
+  userId: string;
+  codeSubmission: string | null;
   completed: boolean;
-  code_submission: string | null;
-  submitted_at: string;
+  submittedAt: string;
 }
 
-// Fetch practice problems with user progress
+// Fetch user's practice problems from the database
 export const fetchUserPracticeProblems = async (userId: string): Promise<PracticeProblem[] | null> => {
   try {
+    // Fetch user's completed problems
+    const { data: completedProblems, error: completedError } = await supabase
+      .from('user_problem_attempts')
+      .select('problem_id')
+      .eq('user_id', userId)
+      .eq('completed', true);
+    
+    if (completedError) {
+      console.error("Error fetching completed problems:", completedError);
+      return null;
+    }
+    
+    // Create a set of completed problem IDs for quick lookup
+    const completedProblemIds = new Set(completedProblems?.map(item => item.problem_id));
+    
     // Fetch all practice problems
     const { data: problemsData, error: problemsError } = await supabase
       .from('practice_problems')
-      .select('*')
-      .order('difficulty');
+      .select('*');
     
-    if (problemsError) throw problemsError;
-    if (!problemsData) return [];
-    
-    // Fetch user attempts for these problems
-    const { data: attemptsData, error: attemptsError } = await supabase
-      .from('user_problem_attempts')
-      .select('*')
-      .eq('user_id', userId);
-    
-    if (attemptsError) throw attemptsError;
-    
-    // Create a map of problem_id -> completed status
-    const problemAttemptsMap = new Map();
-    if (attemptsData) {
-      attemptsData.forEach((attempt: any) => {
-        problemAttemptsMap.set(attempt.problem_id, attempt.completed);
-      });
+    if (problemsError) {
+      console.error("Error fetching practice problems:", problemsError);
+      return null;
     }
     
-    // Add completed status to each problem
-    const problemsWithStatus = problemsData.map((problem: any) => ({
-      ...problem,
-      completed: problemAttemptsMap.has(problem.id) ? problemAttemptsMap.get(problem.id) : false
-    }));
+    if (!problemsData) return null;
     
-    return problemsWithStatus as PracticeProblem[];
+    // Transform the problems data into PracticeProblem objects
+    return (problemsData as any[]).map((problem): PracticeProblem => ({
+      id: problem.id,
+      title: problem.title,
+      description: problem.description,
+      difficulty: problem.difficulty,
+      tags: problem.tags || [],
+      solution: problem.solution || null,
+      companyRelevance: problem.company_relevance || ''
+    }));
   } catch (error: any) {
-    console.error('Error fetching practice problems:', error);
+    console.error('Error fetching user practice problems:', error);
     toast.error('Failed to load practice problems');
     return null;
   }
 };
 
-// Update user progress for a specific practice problem
-export const updateProblemProgress = async (
-  userId: string, 
-  problemId: string, 
-  completed: boolean,
-  codeSubmission?: string
-): Promise<boolean> => {
+// Update problem completion status in the database
+export const updateProblemProgress = async (userId: string, problemId: string, completed: boolean): Promise<boolean> => {
   try {
-    // Check if there's already an attempt for this problem
-    const { data: existingAttempt, error: selectError } = await supabase
+    // We need to insert into user_problem_attempts table
+    const { error } = await supabase
       .from('user_problem_attempts')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('problem_id', problemId)
-      .maybeSingle();
+      .upsert({
+        user_id: userId,
+        problem_id: problemId,
+        completed,
+        submitted_at: completed ? new Date().toISOString() : null
+      });
     
-    if (selectError) throw selectError;
-    
-    if (existingAttempt) {
-      // Update existing attempt
-      const { error: updateError } = await supabase
-        .from('user_problem_attempts')
-        .update({ 
-          completed,
-          code_submission: codeSubmission !== undefined ? codeSubmission : (existingAttempt as any).code_submission,
-          submitted_at: new Date().toISOString()
-        })
-        .eq('id', (existingAttempt as any).id);
-      
-      if (updateError) throw updateError;
-    } else {
-      // Create new attempt
-      const { error: insertError } = await supabase
-        .from('user_problem_attempts')
-        .insert({
-          user_id: userId,
-          problem_id: problemId,
-          completed,
-          code_submission: codeSubmission || null
-        });
-      
-      if (insertError) throw insertError;
-    }
-    
+    if (error) throw error;
     return true;
   } catch (error: any) {
     console.error('Error updating problem progress:', error);
-    toast.error('Failed to update your progress');
+    toast.error('Failed to update problem progress');
     return false;
   }
 };
 
-// Get a single practice problem by ID
-export const getPracticeProblem = async (problemId: string): Promise<PracticeProblem | null> => {
-  try {
-    const { data, error } = await supabase
-      .from('practice_problems')
-      .select('*')
-      .eq('id', problemId)
-      .maybeSingle();
-    
-    if (error) throw error;
-    if (!data) return null;
-    
-    return data as PracticeProblem;
-  } catch (error: any) {
-    console.error('Error fetching practice problem:', error);
-    toast.error('Failed to load practice problem');
-    return null;
-  }
-};
-
-// Generate AI practice problems based on assessment results
+// Generate personalized practice problems using AI based on the user's assessment results
 export const generatePracticeProblems = async (
   userId: string,
   assessmentId: string,
@@ -146,9 +98,9 @@ export const generatePracticeProblems = async (
   count: number = 5
 ): Promise<PracticeProblem[] | null> => {
   try {
-    // Call the edge function to generate practice problems
-    const { data: problemsData, error } = await supabase.functions.invoke('generate-practice-problems', {
-      body: { 
+    // Call the edge function to generate the problems
+    const { data: problemsData, error } = await supabase.functions.invoke('generate-problems', {
+      body: {
         userId,
         assessmentId,
         targetCompany,
@@ -156,23 +108,44 @@ export const generatePracticeProblems = async (
         count
       }
     });
-
+    
     if (error) throw error;
-    if (!problemsData || !problemsData.problems || !Array.isArray(problemsData.problems)) {
+    
+    if (!problemsData || !problemsData.problems) {
       throw new Error('Invalid response format from AI');
     }
     
-    // Store the generated problems in the database
-    const { error: insertError } = await supabase
-      .from('practice_problems')
-      .insert(problemsData.problems);
-      
-    if (insertError) throw insertError;
+    // Map the problems to include proper structure
+    const dbProblems = problemsData.problems.map((problem: any) => ({
+      title: problem.title,
+      description: problem.description,
+      difficulty: problem.difficulty || "Medium",
+      tags: problem.tags || [],
+      solution: problem.solution || null,
+      company_relevance: problem.company_relevance || targetCompany
+    }));
     
-    // Return the newly created problems
-    return problemsData.problems as PracticeProblem[];
+    // Next, store all the practice problems
+    const { data, error: problemsError } = await supabase
+      .from('practice_problems')
+      .insert(dbProblems)
+      .select();
+    
+    if (problemsError) throw problemsError;
+    if (!data) return null;
+    
+    // Map the database results to PracticeProblem objects
+    return (data as any[]).map((item): PracticeProblem => ({
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      difficulty: item.difficulty,
+      tags: item.tags || [],
+      solution: item.solution || null,
+      companyRelevance: item.company_relevance || ''
+    }));
   } catch (error: any) {
-    console.error('Error generating practice problems:', error);
+    console.error('Error generating AI practice problems:', error);
     toast.error('Failed to generate practice problems');
     return null;
   }
