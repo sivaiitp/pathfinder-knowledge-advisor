@@ -33,6 +33,7 @@ export const fetchUserPracticeProblems = async (userId: string): Promise<Practic
       .order('difficulty');
     
     if (problemsError) throw problemsError;
+    if (!problemsData) return [];
     
     // Fetch user attempts for these problems - using type assertion to bypass TypeScript constraints
     const { data: attemptsData, error: attemptsError } = await supabase
@@ -51,10 +52,10 @@ export const fetchUserPracticeProblems = async (userId: string): Promise<Practic
     }
     
     // Add completed status to each problem
-    const problemsWithStatus = problemsData ? problemsData.map((problem: any) => ({
+    const problemsWithStatus = problemsData.map((problem: any) => ({
       ...problem,
       completed: problemAttemptsMap.has(problem.id) ? problemAttemptsMap.get(problem.id) : false
-    })) : [];
+    }));
     
     return problemsWithStatus as PracticeProblem[];
   } catch (error: any) {
@@ -88,7 +89,7 @@ export const updateProblemProgress = async (
         .from('user_problem_attempts' as any)
         .update({ 
           completed,
-          code_submission: codeSubmission || (existingAttempt as any).code_submission,
+          code_submission: codeSubmission || existingAttempt.code_submission,
           submitted_at: new Date().toISOString()
         })
         .eq('id', existingAttempt.id);
@@ -126,7 +127,9 @@ export const getPracticeProblem = async (problemId: string): Promise<PracticePro
       .maybeSingle();
     
     if (error) throw error;
-    return data as PracticeProblem | null;
+    if (!data) return null;
+    
+    return data as PracticeProblem;
   } catch (error: any) {
     console.error('Error fetching practice problem:', error);
     toast.error('Failed to load practice problem');

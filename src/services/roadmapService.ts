@@ -44,6 +44,7 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
       .order('difficulty', { ascending: true });
 
     if (topicsError) throw topicsError;
+    if (!topicsData) return [];
     
     // Fetch user progress for these topics
     const { data: progressData, error: progressError } = await supabase
