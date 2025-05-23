@@ -33,18 +33,19 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
     const roadmapSections: RoadmapSection[] = [];
     
     for (const roadmap of roadmapData) {
-      if (!roadmap.id) continue; // Skip if roadmap id is missing
+      const roadmapId = roadmap.id as string;
+      if (!roadmapId) continue; // Skip if roadmap id is missing
       
       const { data: topicsData, error: topicsError } = await supabase
         .from('learning_topics')
         .select('*')
-        .eq('roadmap_id', roadmap.id);
+        .eq('roadmap_id', roadmapId);
       
       if (topicsError) throw topicsError;
       if (!topicsData) continue;
       
       // Transform the topics data into LearningTopic objects
-      const learningTopics: LearningTopic[] = topicsData.map((topic: any) => ({
+      const learningTopics: LearningTopic[] = (topicsData as any[]).map((topic) => ({
         id: topic.id,
         name: topic.title,
         description: topic.description,
@@ -57,8 +58,8 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
       
       // Add the roadmap section to the result
       roadmapSections.push({
-        id: roadmap.id,
-        title: roadmap.target_role || "Custom Roadmap",
+        id: roadmapId,
+        title: (roadmap.target_role as string) || "Custom Roadmap",
         topics: learningTopics,
         completed: completedTopics,
         total: totalTopics
@@ -126,7 +127,7 @@ export const generateAIRoadmap = async (options: {
     if (roadmapError) throw roadmapError;
     if (!roadmapRecord) throw new Error('Failed to create roadmap record');
     
-    const roadmapId = roadmapRecord.id;
+    const roadmapId = roadmapRecord.id as string;
     
     // Map the topics to include the roadmap ID and proper structure
     const dbTopics = roadmapData.topics.map((topic: any) => ({

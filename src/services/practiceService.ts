@@ -89,10 +89,10 @@ export const updateProblemProgress = async (
         .from('user_problem_attempts')
         .update({ 
           completed,
-          code_submission: codeSubmission !== undefined ? codeSubmission : existingAttempt.code_submission,
+          code_submission: codeSubmission !== undefined ? codeSubmission : (existingAttempt as any).code_submission,
           submitted_at: new Date().toISOString()
         })
-        .eq('id', existingAttempt.id);
+        .eq('id', (existingAttempt as any).id);
       
       if (updateError) throw updateError;
     } else {

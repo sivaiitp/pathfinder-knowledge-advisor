@@ -42,8 +42,8 @@ export const checkUserAssessment = async (userId: string): Promise<{ id: string;
     if (!data) return null;
     
     return {
-      id: data.id,
-      score: data.score
+      id: data.id as string,
+      score: data.score as number
     };
   } catch (error: any) {
     console.error('Error checking assessment:', error);
@@ -94,7 +94,7 @@ export const saveQuizResults = async (
     if (assessmentError) throw assessmentError;
     if (!assessmentData) throw new Error('Failed to create assessment record');
     
-    const assessmentId = assessmentData.id;
+    const assessmentId = assessmentData.id as string;
     
     // Then save all the user responses
     const userResponses = responses.map(response => ({
@@ -140,7 +140,7 @@ export const saveQuizQuestions = async (questions: QuizQuestion[]): Promise<Quiz
     if (!data) return null;
     
     // Map the database results back to QuizQuestion objects
-    return data.map(item => ({
+    return data.map((item: any) => ({
       id: item.id,
       question: item.question_text,
       options: item.options,

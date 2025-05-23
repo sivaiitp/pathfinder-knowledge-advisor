@@ -49,6 +49,8 @@ serve(async (req) => {
         "difficulty": 2,
         "topic": "The topic this question covers"
       }
+
+      IMPORTANT: Return ONLY the JSON array, without any surrounding text or comments.
     `;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -80,6 +82,9 @@ serve(async (req) => {
       // Sometimes GPT returns the JSON with markdown code blocks
       const jsonContent = content.replace(/```json|```/g, '').trim();
       quiz = JSON.parse(jsonContent);
+      
+      // Log success for debugging
+      console.log(`Successfully parsed quiz with ${quiz.length} questions`);
     } catch (error) {
       console.error('Error parsing quiz JSON:', error);
       console.log('Raw content:', data.choices[0].message.content);
