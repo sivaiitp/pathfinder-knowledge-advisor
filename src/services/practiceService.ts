@@ -1,0 +1,131 @@
+
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/sonner";
+
+export interface PracticeProblem {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: string;
+  tags: string[];
+  company_relevance: string;
+  solution?: string | null;
+  created_at: string;
+  completed?: boolean; // Used when joining with user attempts
+}
+
+export interface UserProblemAttempt {
+  id: string;
+  user_id: string;
+  problem_id: string;
+  completed: boolean;
+  code_submission: string | null;
+  submitted_at: string;
+}
+
+// Fetch practice problems with user progress
+export const fetchUserPracticeProblems = async (userId: string): Promise<PracticeProblem[] | null> => {
+  try {
+    // Fetch all practice problems
+    const { data: problemsData, error: problemsError } = await supabase
+      .from('practice_problems')
+      .select('*')
+      .order('difficulty');
+    
+    if (problemsError) throw problemsError;
+    
+    // Fetch user attempts for these problems
+    const { data: attemptsData, error: attemptsError } = await supabase
+      .from('user_problem_attempts')
+      .select('*')
+      .eq('user_id', userId);
+    
+    if (attemptsError) throw attemptsError;
+    
+    // Create a map of problem_id -> completed status
+    const problemAttemptsMap = new Map();
+    attemptsData?.forEach(attempt => {
+      problemAttemptsMap.set(attempt.problem_id, attempt.completed);
+    });
+    
+    // Add completed status to each problem
+    const problemsWithStatus = problemsData?.map(problem => ({
+      ...problem,
+      completed: problemAttemptsMap.has(problem.id) ? problemAttemptsMap.get(problem.id) : false
+    }));
+    
+    return problemsWithStatus || [];
+  } catch (error: any) {
+    console.error('Error fetching practice problems:', error);
+    toast.error('Failed to load practice problems');
+    return null;
+  }
+};
+
+// Update user progress for a specific practice problem
+export const updateProblemProgress = async (
+  userId: string, 
+  problemId: string, 
+  completed: boolean,
+  codeSubmission?: string
+): Promise<boolean> => {
+  try {
+    // Check if there's already an attempt for this problem
+    const { data: existingAttempt } = await supabase
+      .from('user_problem_attempts')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('problem_id', problemId)
+      .maybeSingle();
+    
+    if (existingAttempt) {
+      // Update existing attempt
+      const { error } = await supabase
+        .from('user_problem_attempts')
+        .update({ 
+          completed,
+          code_submission: codeSubmission || existingAttempt.code_submission,
+          submitted_at: new Date().toISOString()
+        })
+        .eq('id', existingAttempt.id);
+      
+      if (error) throw error;
+    } else {
+      // Create new attempt
+      const { error } = await supabase
+        .from('user_problem_attempts')
+        .insert({
+          user_id: userId,
+          problem_id: problemId,
+          completed,
+          code_submission: codeSubmission || null
+        });
+      
+      if (error) throw error;
+    }
+    
+    return true;
+  } catch (error: any) {
+    console.error('Error updating problem progress:', error);
+    toast.error('Failed to update your progress');
+    return false;
+  }
+};
+
+// Get a single practice problem by ID
+export const getPracticeProblem = async (problemId: string): Promise<PracticeProblem | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('practice_problems')
+      .select('*')
+      .eq('id', problemId)
+      .maybeSingle();
+    
+    if (error) throw error;
+    return data;
+  } catch (error: any) {
+    console.error('Error fetching practice problem:', error);
+    toast.error('Failed to load practice problem');
+    return null;
+  }
+};

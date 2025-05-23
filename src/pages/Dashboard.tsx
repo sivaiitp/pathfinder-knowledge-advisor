@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,31 +18,9 @@ import AssessmentSetup from "@/components/AssessmentSetup";
 import Quiz from "@/components/Quiz";
 import { useAuth } from "@/contexts/AuthContext";
 import { generateQuiz, saveQuizResults, saveQuizQuestions, checkUserAssessment, QuizQuestion } from "@/services/quizService";
+import { fetchUserRoadmap, updateTopicProgress, RoadmapSection } from "@/services/roadmapService";
+import { fetchUserPracticeProblems, updateProblemProgress, PracticeProblem } from "@/services/practiceService";
 import { toast } from "@/components/ui/sonner";
-import { supabase } from "@/integrations/supabase/client";
-
-// Define interfaces for our data structures
-interface Topic {
-  name: string;
-  completed: boolean;
-}
-
-interface RoadmapSection {
-  id: number;
-  title: string;
-  completed: number;
-  total: number;
-  topics: Topic[];
-}
-
-interface PracticeProblem {
-  id: number;
-  title: string;
-  difficulty: string;
-  tags: string[];
-  completed: boolean;
-  companyRelevance: string;
-}
 
 const Dashboard = () => {
   const [progress, setProgress] = useState(0);
@@ -53,6 +32,8 @@ const Dashboard = () => {
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [roadmapData, setRoadmapData] = useState<RoadmapSection[]>([]);
   const [practiceProblems, setPracticeProblems] = useState<PracticeProblem[]>([]);
+  const [isLoadingRoadmap, setIsLoadingRoadmap] = useState(false);
+  const [isLoadingProblems, setIsLoadingProblems] = useState(false);
   const [userInfoLoading, setUserInfoLoading] = useState(true);
   const [userInfo, setUserInfo] = useState({
     name: "",
@@ -70,8 +51,8 @@ const Dashboard = () => {
         
         if (assessment) {
           // After confirming assessment is done, load roadmap data and practice problems
-          fetchRoadmapData();
-          fetchPracticeProblems();
+          loadUserRoadmap();
+          loadPracticeProblems();
         }
         
         setIsLoadingAssessment(false);
@@ -106,126 +87,78 @@ const Dashboard = () => {
     fetchUserInfo();
   }, [user]);
   
-  // Fetch roadmap data from database
-  const fetchRoadmapData = async () => {
-    // For now, we'll use mock data since the database doesn't have a roadmap table yet
-    // In a future iteration, this would be replaced with actual database queries
-    const mockRoadmap = [
-      {
-        id: 1,
-        title: "Data Structures",
-        completed: 3,
-        total: 8,
-        topics: [
-          { name: "Arrays & Strings", completed: true },
-          { name: "Linked Lists", completed: true },
-          { name: "Stacks & Queues", completed: true },
-          { name: "Trees & Graphs", completed: false },
-          { name: "Heaps", completed: false },
-          { name: "Hash Tables", completed: false },
-          { name: "Tries", completed: false },
-          { name: "Advanced Data Structures", completed: false },
-        ]
-      },
-      {
-        id: 2,
-        title: "Algorithms",
-        completed: 2,
-        total: 8,
-        topics: [
-          { name: "Searching Algorithms", completed: true },
-          { name: "Sorting Algorithms", completed: true },
-          { name: "Recursion", completed: false },
-          { name: "Dynamic Programming", completed: false },
-          { name: "Greedy Algorithms", completed: false },
-          { name: "Backtracking", completed: false },
-          { name: "Graph Algorithms", completed: false },
-          { name: "Bit Manipulation", completed: false },
-        ]
-      },
-      {
-        id: 3,
-        title: "System Design",
-        completed: 0,
-        total: 5,
-        topics: [
-          { name: "System Design Basics", completed: false },
-          { name: "Scalability", completed: false },
-          { name: "API Design", completed: false },
-          { name: "Database Design", completed: false },
-          { name: "Caching & Load Balancing", completed: false },
-        ]
-      },
-      {
-        id: 4,
-        title: "Behavioral",
-        completed: 0,
-        total: 3,
-        topics: [
-          { name: "Leadership Principles", completed: false },
-          { name: "Common Questions", completed: false },
-          { name: "Situational Examples", completed: false },
-        ]
-      },
-    ];
+  // Load roadmap data from the database
+  const loadUserRoadmap = async () => {
+    if (!user) return;
     
-    setRoadmapData(mockRoadmap);
-    
-    // Calculate overall progress based on completed topics
-    const totalTopics = mockRoadmap.reduce((acc, section) => acc + section.total, 0);
-    const completedTopics = mockRoadmap.reduce((acc, section) => acc + section.completed, 0);
-    
-    setProgress(Math.round((completedTopics / totalTopics) * 100));
+    try {
+      setIsLoadingRoadmap(true);
+      const roadmap = await fetchUserRoadmap(user.id);
+      
+      if (roadmap) {
+        setRoadmapData(roadmap);
+        
+        // Calculate overall progress based on completed topics
+        const totalTopics = roadmap.reduce((acc, section) => acc + section.total, 0);
+        const completedTopics = roadmap.reduce((acc, section) => acc + section.completed, 0);
+        
+        setProgress(Math.round((completedTopics / totalTopics) * 100));
+      }
+    } catch (error) {
+      console.error("Error loading roadmap:", error);
+      toast.error("Failed to load your learning roadmap");
+    } finally {
+      setIsLoadingRoadmap(false);
+    }
   };
   
-  // Fetch practice problems from database
-  const fetchPracticeProblems = async () => {
-    // For now, we'll use mock data since the database doesn't have a practice problems table yet
-    // In a future iteration, this would be replaced with actual database queries
-    const mockProblems = [
-      {
-        id: 1,
-        title: "Two Sum",
-        difficulty: "Easy",
-        tags: ["Arrays", "Hash Table"],
-        completed: true,
-        companyRelevance: "High"
-      },
-      {
-        id: 2,
-        title: "Merge Two Sorted Lists",
-        difficulty: "Easy",
-        tags: ["Linked List", "Recursion"],
-        completed: false,
-        companyRelevance: "High"
-      },
-      {
-        id: 3,
-        title: "Valid Parentheses",
-        difficulty: "Easy",
-        tags: ["Stack", "String"],
-        completed: true,
-        companyRelevance: "Medium"
-      },
-      {
-        id: 4,
-        title: "LRU Cache",
-        difficulty: "Medium",
-        tags: ["Hash Table", "Linked List", "Design"],
-        completed: false,
-        companyRelevance: "High"
-      },
-      {
-        id: 5,
-        title: "Number of Islands",
-        difficulty: "Medium",
-        tags: ["DFS", "BFS", "Union Find"],
-        completed: false,
-        companyRelevance: "High"
-      },
-    ];
+  // Load practice problems from the database
+  const loadPracticeProblems = async () => {
+    if (!user) return;
     
-    setPracticeProblems(mockProblems);
+    try {
+      setIsLoadingProblems(true);
+      const problems = await fetchUserPracticeProblems(user.id);
+      
+      if (problems) {
+        setPracticeProblems(problems);
+      }
+    } catch (error) {
+      console.error("Error loading practice problems:", error);
+      toast.error("Failed to load practice problems");
+    } finally {
+      setIsLoadingProblems(false);
+    }
+  };
+  
+  const handleTopicStatusChange = async (topicId: string, completed: boolean) => {
+    if (!user) {
+      toast.error("You need to be logged in to track progress");
+      return;
+    }
+    
+    const success = await updateTopicProgress(user.id, topicId, completed);
+    
+    if (success) {
+      // Refresh roadmap data to update the UI
+      loadUserRoadmap();
+      toast.success(completed ? "Topic marked as complete!" : "Topic marked as incomplete");
+    }
+  };
+  
+  const handleProblemAction = async (problemId: string, completed: boolean) => {
+    if (!user) {
+      toast.error("You need to be logged in to track progress");
+      return;
+    }
+    
+    const success = await updateProblemProgress(user.id, problemId, completed);
+    
+    if (success) {
+      // Refresh practice problem data to update the UI
+      loadPracticeProblems();
+      toast.success(completed ? "Problem marked as complete!" : "You can try this problem again");
+    }
   };
   
   const handleStartAssessment = () => {
@@ -277,8 +210,8 @@ const Dashboard = () => {
         setHasCompletedAssessment(true);
         
         // After saving assessment, load roadmap data and practice problems
-        fetchRoadmapData();
-        fetchPracticeProblems();
+        loadUserRoadmap();
+        loadPracticeProblems();
         
         // Give the user some time to review their answers before returning to dashboard
         setTimeout(() => {
@@ -389,46 +322,62 @@ const Dashboard = () => {
               
               {/* Roadmap Content */}
               <TabsContent value="roadmap" className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {roadmapData.map((section) => (
-                    <Card key={section.id} className="card-hover">
-                      <CardHeader>
-                        <CardTitle>{section.title}</CardTitle>
-                        <CardDescription>
-                          {section.completed}/{section.total} topics completed
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <Progress 
-                          value={(section.completed / section.total) * 100} 
-                          className="h-2 mb-4" 
-                        />
-                        <ul className="space-y-2">
-                          {section.topics.map((topic, index) => (
-                            <li key={index} className="flex items-center">
-                              {topic.completed ? (
-                                <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                              ) : (
-                                <div className="mr-2 h-4 w-4 rounded-full border border-gray-300" />
-                              )}
-                              <span className={topic.completed ? "line-through text-muted-foreground" : ""}>
-                                {topic.name}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                      <CardFooter>
-                        <Button 
-                          variant="outline" 
-                          className="w-full border-brand-500 text-brand-600 hover:bg-brand-50"
-                        >
-                          Start Learning
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))}
-                </div>
+                {isLoadingRoadmap ? (
+                  <div className="flex items-center justify-center p-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {roadmapData.map((section) => (
+                      <Card key={section.id} className="card-hover">
+                        <CardHeader>
+                          <CardTitle>{section.title}</CardTitle>
+                          <CardDescription>
+                            {section.completed}/{section.total} topics completed
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <Progress 
+                            value={(section.completed / section.total) * 100} 
+                            className="h-2 mb-4" 
+                          />
+                          <ul className="space-y-2">
+                            {section.topics.map((topic) => (
+                              <li key={topic.id} className="flex items-center">
+                                <div
+                                  className="mr-2 cursor-pointer"
+                                  onClick={() => handleTopicStatusChange(topic.id, !topic.completed)}
+                                >
+                                  {topic.completed ? (
+                                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                                  ) : (
+                                    <div className="h-5 w-5 rounded-full border border-gray-300 hover:border-brand-500" />
+                                  )}
+                                </div>
+                                <div className="flex-1">
+                                  <span className={topic.completed ? "line-through text-muted-foreground" : ""}>
+                                    {topic.name}
+                                  </span>
+                                  {topic.description && (
+                                    <p className="text-xs text-gray-500 mt-0.5">{topic.description}</p>
+                                  )}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </CardContent>
+                        <CardFooter>
+                          <Button 
+                            variant="outline" 
+                            className="w-full border-brand-500 text-brand-600 hover:bg-brand-50"
+                          >
+                            Start Learning
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </TabsContent>
               
               {/* Practice Problems Content */}
@@ -441,56 +390,63 @@ const Dashboard = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      {practiceProblems.map((problem) => (
-                        <div 
-                          key={problem.id} 
-                          className="p-4 border border-gray-100 rounded-lg flex items-center justify-between"
-                        >
-                          <div>
-                            <div className="flex items-center mb-1">
-                              <h4 className="font-medium">
-                                {problem.title}
-                              </h4>
-                              {problem.completed && (
-                                <span className="ml-3 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                                  Completed
+                    {isLoadingProblems ? (
+                      <div className="flex items-center justify-center p-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {practiceProblems.map((problem) => (
+                          <div 
+                            key={problem.id} 
+                            className="p-4 border border-gray-100 rounded-lg flex items-center justify-between"
+                          >
+                            <div>
+                              <div className="flex items-center mb-1">
+                                <h4 className="font-medium">
+                                  {problem.title}
+                                </h4>
+                                {problem.completed && (
+                                  <span className="ml-3 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                    Completed
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center text-sm text-gray-500">
+                                <span className={`mr-2 px-2 py-0.5 rounded-full text-xs ${
+                                  problem.difficulty === "Easy" ? "bg-green-100 text-green-700" : 
+                                  problem.difficulty === "Medium" ? "bg-yellow-100 text-yellow-700" :
+                                  "bg-red-100 text-red-700"
+                                }`}>
+                                  {problem.difficulty}
                                 </span>
-                              )}
+                                {problem.tags.map((tag, i) => (
+                                  <span key={i} className="mr-2">{tag}{i < problem.tags.length - 1 ? "," : ""}</span>
+                                ))}
+                              </div>
                             </div>
-                            <div className="flex items-center text-sm text-gray-500">
-                              <span className={`mr-2 px-2 py-0.5 rounded-full text-xs ${
-                                problem.difficulty === "Easy" ? "bg-green-100 text-green-700" : 
-                                problem.difficulty === "Medium" ? "bg-yellow-100 text-yellow-700" :
-                                "bg-red-100 text-red-700"
+                            <div className="flex items-center">
+                              <span className={`text-xs mr-4 px-2 py-1 rounded-full ${
+                                problem.company_relevance === "High" ? "bg-brand-100 text-brand-700" :
+                                "bg-gray-100 text-gray-700"
                               }`}>
-                                {problem.difficulty}
+                                {problem.company_relevance} relevance
                               </span>
-                              {problem.tags.map((tag, i) => (
-                                <span key={i} className="mr-2">{tag}{i < problem.tags.length - 1 ? "," : ""}</span>
-                              ))}
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleProblemAction(problem.id, !problem.completed)}
+                                variant={problem.completed ? "outline" : "default"}
+                                className={problem.completed ? 
+                                  "border-brand-500 text-brand-600 hover:bg-brand-50" : 
+                                  "bg-brand-600 hover:bg-brand-700"}
+                              >
+                                {problem.completed ? "Review" : "Solve"}
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex items-center">
-                            <span className={`text-xs mr-4 px-2 py-1 rounded-full ${
-                              problem.companyRelevance === "High" ? "bg-brand-100 text-brand-700" :
-                              "bg-gray-100 text-gray-700"
-                            }`}>
-                              {problem.companyRelevance} relevance
-                            </span>
-                            <Button 
-                              size="sm" 
-                              variant={problem.completed ? "outline" : "default"}
-                              className={problem.completed ? 
-                                "border-brand-500 text-brand-600 hover:bg-brand-50" : 
-                                "bg-brand-600 hover:bg-brand-700"}
-                            >
-                              {problem.completed ? "Review" : "Solve"}
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
