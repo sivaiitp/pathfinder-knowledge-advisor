@@ -2,15 +2,32 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, User } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { signOut } from "@/lib/auth";
+import { toast } from "@/components/ui/sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Navbar: React.FC = () => {
   const location = useLocation();
+  const { user } = useAuth();
 
   const isActive = (path: string) => {
     return location.pathname === path ? "text-brand-600" : "text-gray-600 hover:text-brand-600 transition-colors";
   };
   
+  const handleSignOut = async () => {
+    const { success } = await signOut();
+    if (success) {
+      toast.success("Successfully logged out");
+    }
+  };
+
   return (
     <nav className="w-full py-4 bg-white border-b border-gray-100">
       <div className="container flex items-center justify-between">
@@ -35,12 +52,38 @@ const Navbar: React.FC = () => {
               className="pl-10 py-1.5 pr-4 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             />
           </div>
-          <Link to="/login">
-            <Button variant="outline" className="hidden sm:inline-flex">Log In</Button>
-          </Link>
-          <Link to="/signup">
-            <Button className="bg-brand-600 hover:bg-brand-700">Join for free</Button>
-          </Link>
+          
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <div className="flex h-8 w-8 rounded-full items-center justify-center bg-brand-100 text-brand-700">
+                    <User className="h-4 w-4" />
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem>
+                  <Link to="/dashboard" className="w-full">Dashboard</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Link to="/profile" className="w-full">Profile</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSignOut}>
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <>
+              <Link to="/login">
+                <Button variant="outline" className="hidden sm:inline-flex">Log In</Button>
+              </Link>
+              <Link to="/signup">
+                <Button className="bg-brand-600 hover:bg-brand-700">Join for free</Button>
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </nav>
