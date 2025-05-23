@@ -37,22 +37,49 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
       const roadmapId = (roadmap as any).id as string;
       if (!roadmapId) continue; // Skip if roadmap id is missing
       
-      // The `roadmap_id` column might not exist in `learning_topics` table,
-      // consider changing this query to match your actual schema
+      // Query user_progress to get learning topics with completion status
+      const { data: userProgressData, error: progressError } = await supabase
+        .from('user_progress')
+        .select(`
+          completed,
+          topic_id,
+          learning_topics:topic_id(id, title, description, category, difficulty)
+        `)
+        .eq('user_id', userId);
+      
+      if (progressError) {
+        console.error("Error fetching user progress:", progressError);
+        continue;
+      }
+      
+      // Create a map of topic_id -> completed status
+      const topicCompletionMap = new Map();
+      if (userProgressData) {
+        userProgressData.forEach((progress: any) => {
+          if (progress.topic_id && progress.learning_topics) {
+            topicCompletionMap.set(progress.topic_id, progress.completed);
+          }
+        });
+      }
+      
+      // Get all learning topics
       const { data: topicsData, error: topicsError } = await supabase
         .from('learning_topics')
-        .select('*')
-        .eq('roadmap_id', roadmapId);
+        .select('*');
       
-      if (topicsError) throw topicsError;
+      if (topicsError) {
+        console.error("Error fetching learning topics:", topicsError);
+        continue;
+      }
+      
       if (!topicsData) continue;
       
       // Transform the topics data into LearningTopic objects
-      const learningTopics: LearningTopic[] = (topicsData as any[]).map((topic) => ({
+      const learningTopics: LearningTopic[] = topicsData.map((topic: any) => ({
         id: topic.id,
         name: topic.title,
         description: topic.description,
-        completed: topic.completed || false
+        completed: topicCompletionMap.has(topic.id) ? topicCompletionMap.get(topic.id) : false
       }));
       
       // Calculate completed and total topics
@@ -80,8 +107,7 @@ export const fetchUserRoadmap = async (userId: string): Promise<RoadmapSection[]
 // Update topic completion status in the database
 export const updateTopicProgress = async (userId: string, topicId: string, completed: boolean): Promise<boolean> => {
   try {
-    // We need to insert into user_progress, not update learning_topics directly
-    // learning_topics table might not have a 'completed' column
+    // We need to insert into user_progress table
     const { error } = await supabase
       .from('user_progress')
       .upsert({
@@ -142,13 +168,10 @@ export const generateAIRoadmap = async (options: {
     // Map the topics to include the roadmap ID and proper structure
     // Make sure to match the schema of the learning_topics table
     const dbTopics = roadmapData.topics.map((topic: any) => ({
-      ...topic,
-      roadmap_id: roadmapId,
       category: topic.category || "General",
       title: topic.title,
       description: topic.description || null,
       difficulty: topic.difficulty || 2
-      // Don't include 'completed' as it's not in the learning_topics schema
     }));
     
     // Next, store all the learning topics
